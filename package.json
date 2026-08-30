@@ -1,0 +1,15 @@
+{
+  "name": "co-ty-phu-online",
+  "version": "1.0.0",
+  "description": "Webgame Cờ Tỷ Phú online — HTML5 + Vanilla JS + Cloudflare Workers + Durable Objects + WebSocket + AI",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  },
+  "license": "MIT"
+}

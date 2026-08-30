@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#171326" />
+<title>Cờ Tỷ Phú Online</title>
+<meta name="description" content="Webgame Cờ Tỷ Phú online nhiều người chơi, có AI, chạy trên Cloudflare Workers." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="toast-root" class="toast-root" aria-live="polite"></div>
+
+<!-- ======================= MÀN HÌNH CHÍNH ======================= -->
+<section id="screen-home" class="screen screen--active">
+  <div class="home">
+    <div class="home__glow" aria-hidden="true"></div>
+    <h1 class="home__logo">
+      <span class="home__logo-icon" aria-hidden="true">🎲</span>
+      CỜ TỶ PHÚ
+    </h1>
+    <p class="home__tagline">Mua đất · Đầu tư · Thu tiền · Làm giàu</p>
+
+    <nav class="home__menu">
+      <button class="btn btn--primary" data-action="show-offline-setup">CHƠI OFFLINE</button>
+      <button class="btn btn--primary" data-action="show-create-room">TẠO PHÒNG</button>
+      <button class="btn btn--secondary" data-action="show-join-room">THAM GIA PHÒNG</button>
+      <button class="btn btn--ghost" data-action="show-guide">HƯỚNG DẪN</button>
+      <button class="btn btn--ghost" data-action="show-settings">CÀI ĐẶT</button>
+    </nav>
+
+    <p class="home__footer">khahdihdz · phong cách board game đầu tư, không liên kết với bất kỳ thương hiệu nào</p>
+  </div>
+</section>
+
+<!-- ======================= THIẾT LẬP OFFLINE ======================= -->
+<section id="screen-offline-setup" class="screen">
+  <header class="topbar">
+    <button class="icon-btn" data-action="go-home" aria-label="Quay lại">←</button>
+    <h2>Chơi Offline</h2>
+  </header>
+  <div class="panel-list">
+    <label class="field">
+      <span>Tên của bạn</span>
+      <input id="offline-name" type="text" maxlength="20" placeholder="Người chơi" />
+    </label>
+    <label class="field">
+      <span>Số đối thủ AI</span>
+      <select id="offline-ai-count">
+        <option value="1">1 AI</option>
+        <option value="2" selected>2 AI</option>
+        <option value="3">3 AI</option>
+      </select>
+    </label>
+    <button class="btn btn--primary" data-action="start-offline">BẮT ĐẦU</button>
+  </div>
+</section>
+
+<!-- ======================= TẠO PHÒNG ======================= -->
+<section id="screen-create-room" class="screen">
+  <header class="topbar">
+    <button class="icon-btn" data-action="go-home" aria-label="Quay lại">←</button>
+    <h2>Tạo Phòng</h2>
+  </header>
+  <div class="panel-list">
+    <label class="field">
+      <span>Tên của bạn</span>
+      <input id="create-name" type="text" maxlength="20" placeholder="Người chơi" />
+    </label>
+    <button class="btn btn--primary" data-action="do-create-room">TẠO PHÒNG MỚI</button>
+  </div>
+</section>
+
+<!-- ======================= THAM GIA PHÒNG ======================= -->
+<section id="screen-join-room" class="screen">
+  <header class="topbar">
+    <button class="icon-btn" data-action="go-home" aria-label="Quay lại">←</button>
+    <h2>Tham Gia Phòng</h2>
+  </header>
+  <div class="panel-list">
+    <label class="field">
+      <span>Tên của bạn</span>
+      <input id="join-name" type="text" maxlength="20" placeholder="Người chơi" />
+    </label>
+    <label class="field">
+      <span>Mã phòng</span>
+      <input id="join-code" type="text" maxlength="6" placeholder="VD: ABCD" style="text-transform:uppercase" />
+    </label>
+    <button class="btn btn--primary" data-action="do-join-room">VÀO PHÒNG</button>
+  </div>
+</section>
+
+<!-- ======================= LOBBY ======================= -->
+<section id="screen-lobby" class="screen">
+  <header class="topbar">
+    <button class="icon-btn" data-action="leave-room" aria-label="Rời phòng">←</button>
+    <h2>PHÒNG <span id="lobby-room-code">----</span></h2>
+  </header>
+
+  <div class="lobby">
+    <ul id="lobby-players" class="lobby__players"></ul>
+    <p id="lobby-count" class="lobby__count">0/4 người chơi</p>
+
+    <div class="lobby__actions">
+      <label class="checkbox">
+        <input type="checkbox" id="lobby-fill-ai" />
+        <span>Tự động điền AI vào chỗ trống</span>
+      </label>
+      <button class="btn btn--secondary" data-action="toggle-ready">SẴN SÀNG</button>
+      <button class="btn btn--primary" id="lobby-start-btn" data-action="start-online-game">BẮT ĐẦU</button>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= BÀN CỜ ======================= -->
+<section id="screen-board" class="screen">
+  <header class="topbar topbar--board">
+    <button class="icon-btn" data-action="leave-room" aria-label="Thoát">←</button>
+    <div class="ticker" id="money-ticker" aria-label="Bảng tiền mặt trực tiếp"></div>
+    <button class="icon-btn" data-action="toggle-chat" aria-label="Trò chuyện">💬</button>
+  </header>
+
+  <div class="board-wrap">
+    <div id="board" class="board" role="img" aria-label="Bàn cờ tỷ phú"></div>
+
+    <div class="board-center" id="board-center">
+      <div class="board-center__dice" id="dice-display" aria-hidden="true">
+        <div class="die" id="die-1">1</div>
+        <div class="die" id="die-2">1</div>
+      </div>
+      <p class="board-center__turn" id="turn-indicator">Đang chờ...</p>
+      <p class="board-center__ai" id="ai-thinking-indicator" hidden>🤖 AI đang suy nghĩ...</p>
+      <button class="btn btn--primary btn--roll" id="btn-roll" data-action="roll-dice">TUNG XÚC XẮC</button>
+      <div class="board-center__decision" id="decision-panel" hidden></div>
+      <button class="btn btn--secondary" id="btn-end-turn" data-action="end-turn" hidden>KẾT THÚC LƯỢT</button>
+      <button class="btn btn--ghost btn--small" id="btn-open-trade" data-action="open-trade">🤝 Giao dịch</button>
+    </div>
+  </div>
+
+  <div class="hud" id="player-hud"></div>
+
+  <!-- Panel chat trượt lên từ dưới -->
+  <div id="chat-panel" class="chat-panel">
+    <div class="chat-panel__header">
+      <span>Trò chuyện</span>
+      <button class="icon-btn" data-action="toggle-chat">✕</button>
+    </div>
+    <div id="chat-log" class="chat-panel__log"></div>
+    <div id="game-log" class="chat-panel__gamelog"></div>
+    <form id="chat-form" class="chat-panel__form">
+      <input id="chat-input" type="text" maxlength="500" placeholder="Nhắn gì đó..." autocomplete="off" />
+      <button type="submit" class="btn btn--primary btn--small">Gửi</button>
+    </form>
+  </div>
+</section>
+
+<!-- ======================= HƯỚNG DẪN ======================= -->
+<section id="screen-guide" class="screen">
+  <header class="topbar">
+    <button class="icon-btn" data-action="go-home" aria-label="Quay lại">←</button>
+    <h2>Hướng Dẫn</h2>
+  </header>
+  <div class="panel-list guide">
+    <p><strong>Mục tiêu:</strong> mua đất, xây nhà, thu tiền thuê và khiến đối thủ phá sản trước bạn.</p>
+    <p><strong>Lượt chơi:</strong> tung xúc xắc → di chuyển → xử lý ô đang đứng (mua đất, trả thuế, rút thẻ sự kiện...) → kết thúc lượt.</p>
+    <p><strong>Đôi (xúc xắc giống nhau):</strong> được đi thêm một lượt, nhưng đổ đôi 3 lần liên tiếp sẽ vào Nhà Giam.</p>
+    <p><strong>Nâng cấp:</strong> chỉ nâng cấp được khi sở hữu trọn bộ một nhóm màu.</p>
+    <p><strong>Giao dịch:</strong> đề nghị đổi đất/tiền với người chơi khác ngay trong ván.</p>
+    <p><strong>Phá sản:</strong> hết tiền và không thể thanh toán → bị loại khỏi ván.</p>
+  </div>
+</section>
+
+<!-- ======================= CÀI ĐẶT ======================= -->
+<section id="screen-settings" class="screen">
+  <header class="topbar">
+    <button class="icon-btn" data-action="go-home" aria-label="Quay lại">←</button>
+    <h2>Cài Đặt</h2>
+  </header>
+  <div class="panel-list">
+    <label class="checkbox">
+      <input type="checkbox" id="setting-sound" checked />
+      <span>Âm thanh</span>
+    </label>
+    <label class="field">
+      <span>Ngôn ngữ</span>
+      <select id="setting-lang">
+        <option value="vi" selected>Tiếng Việt</option>
+        <option value="en">English (sắp có)</option>
+      </select>
+    </label>
+  </div>
+</section>
+
+<!-- Modal mua đất -->
+<div id="modal-buy" class="modal" hidden>
+  <div class="modal__card">
+    <h3 id="modal-buy-name">Tên đất</h3>
+    <p class="modal__price">Giá: <span id="modal-buy-price">0</span></p>
+    <div class="modal__actions">
+      <button class="btn btn--secondary" data-action="skip-property">BỎ QUA</button>
+      <button class="btn btn--primary" data-action="buy-property">MUA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal giao dịch -->
+<div id="modal-trade" class="modal" hidden>
+  <div class="modal__card modal__card--wide">
+    <h3>Đề nghị giao dịch</h3>
+    <div id="trade-form"></div>
+    <div class="modal__actions">
+      <button class="btn btn--secondary" data-action="close-trade">ĐÓNG</button>
+      <button class="btn btn--primary" data-action="send-trade">GỬI ĐỀ NGHỊ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nhận đề nghị giao dịch -->
+<div id="modal-trade-incoming" class="modal" hidden>
+  <div class="modal__card">
+    <h3>Đề nghị giao dịch</h3>
+    <p id="trade-incoming-text"></p>
+    <div class="modal__actions">
+      <button class="btn btn--secondary" data-action="decline-trade">TỪ CHỐI</button>
+      <button class="btn btn--primary" data-action="accept-trade">ĐỒNG Ý</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal kết thúc game -->
+<div id="modal-gameover" class="modal" hidden>
+  <div class="modal__card">
+    <h3>🏆 Kết thúc ván!</h3>
+    <p id="gameover-text"></p>
+    <div class="modal__actions">
+      <button class="btn btn--primary" data-action="go-home">VỀ TRANG CHỦ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Banner mất kết nối -->
+<div id="reconnect-banner" class="reconnect-banner" hidden>
+  ⚠️ Mất kết nối — Đang kết nối lại...
+</div>
+
+<!-- game.js là module gốc duy nhất; nó tự import ui.js / websocket.js / gameLogic.js / ai.js / protocol.js -->
+<script type="module" src="game.js"></script>
+</body>
+</html>

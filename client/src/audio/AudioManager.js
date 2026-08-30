@@ -1,1 +1,0 @@
-export class AudioManager{constructor(){this.ctx=null;this.enabled=true}init(){if(!this.ctx)this.ctx=new AudioContext()}beep(freq=440,d=.08){if(!this.enabled)return;this.init();const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.frequency.value=freq;g.gain.value=.04;o.connect(g);g.connect(this.ctx.destination);o.start();o.stop(this.ctx.currentTime+d)}}
