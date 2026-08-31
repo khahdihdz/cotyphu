@@ -9,9 +9,17 @@ const GROUP_COLORS = {
 };
 
 export function navigateTo(screenId) {
+  // Luôn đóng mọi modal đang mở khi chuyển màn hình — tránh trường hợp một
+  // modal (kết thúc ván, mua đất, giao dịch...) bị kẹt hiển thị đè lên màn
+  // hình mới và chặn hết thao tác của người chơi.
+  hideAllModals();
   document.querySelectorAll('.screen').forEach((el) => el.classList.remove('screen--active'));
   const target = document.getElementById(screenId);
   if (target) target.classList.add('screen--active');
+}
+
+export function hideAllModals() {
+  document.querySelectorAll('.modal').forEach((m) => { m.hidden = true; });
 }
 
 export function showToast(text, variant = '') {
