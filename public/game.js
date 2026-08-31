@@ -71,6 +71,7 @@ const ACTIONS = {
 
 document.getElementById('setting-sound').addEventListener('change', (e) => {
   App.settings.sound = e.target.checked;
+  UI.setSoundEnabled(App.settings.sound);
   saveSettings();
 });
 document.getElementById('setting-lang').addEventListener('change', (e) => {
@@ -79,6 +80,7 @@ document.getElementById('setting-lang').addEventListener('change', (e) => {
 });
 document.getElementById('setting-sound').checked = App.settings.sound;
 document.getElementById('setting-lang').value = App.settings.lang;
+UI.setSoundEnabled(App.settings.sound);
 
 document.getElementById('chat-form').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -641,7 +643,7 @@ async function applyEvents(events) {
   for (const evt of events) {
     switch (evt.type) {
       case 'DICE_RESULT':
-        UI.renderDice(evt.dice, { rolling: true });
+        await UI.renderDice(evt.dice, { rolling: true });
         UI.addGameLog(`🎲 ${playerName(evt.playerId)} đổ được ${evt.dice[0]} + ${evt.dice[1]}.`);
         break;
       case 'PLAYER_MOVED': {

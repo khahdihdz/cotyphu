@@ -295,21 +295,168 @@ function escapeHtml(str) {
 
 /* -------------------------------- Dice ---------------------------------- */
 
+// Cách sắp xếp chấm trên mặt xúc xắc, theo lưới 3x3 (chỉ số 0..8).
+const DIE_PIP_PATTERNS = {
+  1: [4],
+  2: [0, 8],
+  3: [0, 4, 8],
+  4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8],
+  6: [0, 2, 3, 5, 6, 8],
+};
+
+let soundEnabled = true;
+export function setSoundEnabled(enabled) {
+  soundEnabled = !!enabled;
+}
+
+let audioCtx = null;
+function getAudioCtx() {
+  if (!soundEnabled) return null;
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    try {
+      audioCtx = new Ctx();
+    } catch (_err) {
+      return null;
+    }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  return audioCtx;
+}
+
+/** Tiếng "lắc" ngắn mỗi khi mặt xúc xắc đổi số trong lúc đang lăn. */
+function playDiceTick() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const dur = 0.03;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 900 + Math.random() * 700;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.12;
+    noise.connect(filter).connect(gain).connect(ctx.destination);
+    noise.start();
+  } catch (_err) { /* bỏ qua nếu trình duyệt chặn audio */ }
+}
+
+/** Tiếng "cộp" trầm khi xúc xắc dừng hẳn xuống bàn. */
+function playDiceLand() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(200, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.18);
+  } catch (_err) { /* bỏ qua nếu trình duyệt chặn audio */ }
+}
+
+function ensureDiePips(dieEl) {
+  if (dieEl.childElementCount === 9) return;
+  dieEl.innerHTML = '';
+  for (let i = 0; i < 9; i += 1) {
+    const pip = document.createElement('span');
+    pip.className = 'die__pip';
+    dieEl.appendChild(pip);
+  }
+}
+
+function setDieFace(dieEl, value) {
+  ensureDiePips(dieEl);
+  const active = DIE_PIP_PATTERNS[value] || [];
+  const activeSet = new Set(active);
+  Array.from(dieEl.children).forEach((pip, i) => pip.classList.toggle('die__pip--on', activeSet.has(i)));
+  dieEl.setAttribute('aria-label', String(value));
+}
+
+function randomDieValue() {
+  return 1 + Math.floor(Math.random() * 6);
+}
+
+/**
+ * Đổ xúc xắc với hiệu ứng lăn thật: 2 viên xúc xắc rung lắc và đổi mặt liên
+ * tục, chậm dần lại rồi "chốt" đúng vào kết quả cuối cùng kèm nảy nhẹ + lóe
+ * sáng. Trả về Promise để nơi gọi có thể chờ hiệu ứng chạy xong (ví dụ để
+ * quân cờ chỉ bắt đầu di chuyển sau khi xúc xắc đã dừng hẳn).
+ */
+function animateDiceRoll(dice) {
+  return new Promise((resolve) => {
+    const d1 = document.getElementById('die-1');
+    const d2 = document.getElementById('die-2');
+    const display = document.getElementById('dice-display');
+    ensureDiePips(d1);
+    ensureDiePips(d2);
+    display?.classList.add('dice-display--rolling');
+    d1.classList.add('die--rolling');
+    d2.classList.add('die--rolling');
+
+    const totalDuration = 650;
+    const start = performance.now();
+    let lastTick = -Infinity;
+
+    function frame(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / totalDuration, 1);
+      const interval = 50 + progress * 160; // đổi mặt nhanh dần chậm lại về cuối
+      if (elapsed - lastTick >= interval) {
+        lastTick = elapsed;
+        setDieFace(d1, randomDieValue());
+        setDieFace(d2, randomDieValue());
+        playDiceTick();
+      }
+      if (elapsed < totalDuration) {
+        requestAnimationFrame(frame);
+        return;
+      }
+      display?.classList.remove('dice-display--rolling');
+      d1.classList.remove('die--rolling');
+      d2.classList.remove('die--rolling');
+      if (dice) {
+        setDieFace(d1, dice[0]);
+        setDieFace(d2, dice[1]);
+      }
+      d1.classList.add('die--landed');
+      d2.classList.add('die--landed');
+      playDiceLand();
+      setTimeout(() => {
+        d1.classList.remove('die--landed');
+        d2.classList.remove('die--landed');
+        resolve();
+      }, 280);
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+/**
+ * Hiển thị kết quả xúc xắc. Khi `rolling` là true sẽ chạy hiệu ứng lăn xúc
+ * xắc đầy đủ (xem `animateDiceRoll`) và trả về Promise để nơi gọi `await`
+ * cho tới khi xúc xắc dừng hẳn. Khi false chỉ cập nhật mặt xúc xắc ngay lập
+ * tức (ví dụ lúc vẽ lại toàn bộ màn hình sau khi tải lại ván offline).
+ */
 export function renderDice(dice, { rolling = false } = {}) {
+  if (rolling) return animateDiceRoll(dice);
   const d1 = document.getElementById('die-1');
   const d2 = document.getElementById('die-2');
-  if (rolling) {
-    d1.classList.add('rolling');
-    d2.classList.add('rolling');
-    setTimeout(() => {
-      d1.classList.remove('rolling');
-      d2.classList.remove('rolling');
-    }, 500);
-  }
   if (dice) {
-    d1.textContent = dice[0];
-    d2.textContent = dice[1];
+    setDieFace(d1, dice[0]);
+    setDieFace(d2, dice[1]);
   }
+  return Promise.resolve();
 }
 
 export function setTurnIndicator(text) {

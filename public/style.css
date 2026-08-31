@@ -306,17 +306,61 @@ input, select { font-family: inherit; }
 }
 .board-center__dice { display: flex; gap: 8px; }
 .die {
+  position: relative;
   width: 34px; height: 34px;
-  background: var(--text);
-  color: #241605;
+  background: linear-gradient(160deg, #fff, var(--text));
   border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono); font-weight: 700;
-  font-size: 1.1rem;
-  transition: transform 0.4s cubic-bezier(.36,1.4,.64,1);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 5px;
+  gap: 1px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 -2px 2px rgba(0,0,0,0.12);
+  will-change: transform;
 }
-.die.rolling { animation: die-spin 0.5s ease-in-out; }
-@keyframes die-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.die__pip {
+  align-self: center;
+  justify-self: center;
+  width: 60%;
+  height: 60%;
+  border-radius: 50%;
+  background: transparent;
+  transition: background-color 0.05s linear;
+}
+.die__pip--on {
+  background: #241605;
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.4);
+}
+
+/* Lắc nhẹ toàn bộ cụm xúc xắc khi đang đổ, như đang lắc trong tay/cốc */
+.dice-display--rolling { animation: dice-shake 0.16s ease-in-out infinite; }
+@keyframes dice-shake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 1px); }
+  50% { transform: translate(2px, -1px); }
+  75% { transform: translate(-1px, 1px); }
+}
+
+/* Từng viên xúc xắc tự lật/xoay liên tục trong lúc đang đổ */
+.die--rolling { animation: die-tumble 0.22s ease-in-out infinite; }
+@keyframes die-tumble {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-14deg) scale(1.06) translateY(-2px); }
+  50% { transform: rotate(10deg) scale(0.94); }
+  75% { transform: rotate(-6deg) scale(1.04) translateY(1px); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+/* Hiệu ứng "chốt mặt" khi xúc xắc dừng hẳn ở kết quả cuối cùng */
+.die--landed {
+  animation: die-land 0.28s cubic-bezier(.36, 1.4, .64, 1);
+  box-shadow: 0 0 0 2px var(--gold, #f2b84b), 0 2px 6px rgba(0,0,0,0.5);
+}
+@keyframes die-land {
+  0% { transform: scale(1.3) rotate(6deg); }
+  60% { transform: scale(0.9) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
 .board-center__turn { font-size: 0.85rem; color: var(--text-dim); margin: 0; }
 .board-center__ai { font-size: 0.8rem; color: var(--teal); margin: 0; }
 .btn--roll { width: 100%; max-width: 200px; }
