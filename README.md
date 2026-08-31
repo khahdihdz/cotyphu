@@ -19,6 +19,16 @@ hình ảnh trong game là nội dung gốc.
   ván, độ trễ suy nghĩ tự nhiên (800–2500ms), và có thể phản hồi đề nghị
   giao dịch.
 - **Giao dịch** tài sản + tiền giữa người chơi, được server xác thực.
+- **Thế chấp / chuộc lại**: thế chấp đất trống (chưa xây nhà) để lấy tiền mặt
+  ngay (50% giá đất), chuộc lại với lãi suất 10%. Đất thế chấp không thu được
+  tiền thuê và không thể xây nhà cho tới khi chuộc lại.
+- **Đấu giá**: bỏ qua một ô đất chưa ai sở hữu sẽ mở phiên đấu giá cho mọi
+  người chơi (kể cả người vừa bỏ qua) thay vì để ô đó bỏ trống.
+- **Luật Nhà Giam đầy đủ**: đổ đôi 3 lần liên tiếp bị bắt vào tù ngay; trong
+  tù có thể thử đổ đôi, tự nguyện nộp phạt, hoặc dùng Thẻ Ra Tù Miễn Phí (rút
+  được từ bộ bài Cơ Hội).
+- **Bán nhà chủ động**: có thể bán bớt từng cấp nhà đã xây để lấy lại 50% chi
+  phí xây, không chỉ tự động khi sắp phá sản.
 - **Reconnect** tự động với exponential backoff (1s → 2s → 4s → 8s) và đồng
   bộ lại trạng thái; nếu mất kết nối quá 60 giây, AI tạm thời tiếp quản để
   ván chơi không bị treo.
@@ -165,8 +175,27 @@ code API key/secret vào source code.
 - Bàn cờ có 32 ô, xếp theo chu vi lưới 9×9 (giống bố cục board-game đầu tư cổ
   điển) nhưng toàn bộ tên ô, thẻ bài là nội dung gốc.
 - Cấp thuê/nâng cấp được đơn giản hoá thành 5 cấp (0–4 nhà + khách sạn) để dễ
-  bảo trì, có thể mở rộng thêm luật (thế chấp, đấu giá…) trong `gameLogic.js`
-  nếu cần.
+  bảo trì.
+- Thế chấp/chuộc lại, đấu giá, luật Nhà Giam (đổ đôi 3 lần, nộp phạt, thẻ ra
+  tù) và bán nhà chủ động đều nằm trong `gameLogic.js` (nguồn chính ở
+  `src/`, sao chép y hệt sang `public/` cho chế độ offline) — không tách
+  riêng module vì luật chơi có nhiều phụ thuộc chéo (vd. thế chấp chặn nâng
+  cấp, phá sản tự động thế chấp trước khi tuyên bố phá sản).
+- Đấu giá dùng cơ chế theo lượt (round-robin), người đang giữ giá cao nhất
+  được bỏ qua trong vòng xoay cho tới khi có người trả cao hơn; phiên đấu giá
+  kết thúc khi chỉ còn 1 người chưa rút. `gameRoom.js` (online) và `game.js`
+  (offline) đều có vòng lặp AI đấu giá riêng (`runAuctionAI`), tách khỏi vòng
+  lặp AI chính (`runAILoop`) vì người tham gia đấu giá không nhất thiết là
+  người đang có lượt chơi.
+- Khi một người chơi phá sản ngay trong lượt của chính họ (ví dụ không trả
+  nổi tiền thuê sau khi đã bán nhà + thế chấp hết tài sản), vòng lặp AI vẫn
+  cho phép họ gọi `endTurn()` một lần cuối để nhường lượt — nếu chặn hoàn
+  toàn người chơi đã phá sản, `turnIndex` sẽ mắc kẹt vĩnh viễn ở người đó.
+- Vì điều kiện thắng là "chỉ còn 1 người chưa phá sản", một ván có thể kéo
+  rất dài (thậm chí gần như vô hạn) nếu 2 người chơi còn lại đều đủ giàu/đủ
+  tài sản để thế chấp sống sót qua mọi khoản nợ — đây là đặc điểm của luật
+  chơi (giống board-game gốc), không phải lỗi kỹ thuật.
 - AI không được truy cập bất kỳ thông tin tương lai nào (xúc xắc, thẻ bài) —
   toàn bộ quyết định của AI chỉ dựa trên `state` hiện tại, giống một người
-  chơi thật.
+  chơi thật. AI có thêm logic riêng cho đấu giá (`decideAuctionAction`) và
+  quyết định trong Nhà Giam (`decideJailAction`), tuỳ theo cá tính.

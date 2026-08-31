@@ -17,6 +17,7 @@ const App = {
   roomId: null,
   conn: null,
   aiRunningOffline: false,
+  auctionRunningOffline: false,
   settings: loadSettings(),
 };
 
@@ -57,6 +58,10 @@ const ACTIONS = {
   'roll-dice': rollDice,
   'buy-property': () => decideProperty('BUY'),
   'skip-property': () => decideProperty('SKIP'),
+  'pay-bail': payBail,
+  'use-jail-card': useJailCard,
+  'open-manage': openManageModal,
+  'close-manage': () => UI.hideModal('modal-manage'),
   'end-turn': endTurn,
   'toggle-chat': () => UI.toggleChatPanel(),
   'open-trade': openTradeModal,
@@ -130,12 +135,22 @@ async function runOfflineAILoopIfNeeded() {
   try {
     while (App.mode === 'offline' && App.state && App.state.phase === 'PLAYING') {
       const player = App.state.players[App.state.turnIndex];
-      if (!player || !player.isAI || player.bankrupt) break;
+      if (!player || !player.isAI) break;
+      // Người chơi vừa phá sản trong lượt của chính mình vẫn cần gọi endTurn() một
+      // lần cuối để nhường lượt — nếu không turnIndex sẽ mắc kẹt mãi mãi.
+      if (player.bankrupt && App.state.turnPhase !== 'TURN_DONE') break;
       UI.setAIThinking(true);
       await sleep(AI.getThinkingDelay(player.personality));
       UI.setAIThinking(false);
 
-      if (App.state.turnPhase === 'AWAITING_ROLL') {
+      if (App.state.turnPhase === 'AWAITING_ROLL' && player.inJail) {
+        const jailAction = AI.decideJailAction(App.state, player);
+        let res;
+        if (jailAction === 'PAY_BAIL') res = Game.payBail(App.state, player.id);
+        else if (jailAction === 'USE_CARD') res = Game.useJailCard(App.state, player.id);
+        else res = Game.rollDice(App.state, player.id);
+        applyEvents(res.events);
+      } else if (App.state.turnPhase === 'AWAITING_ROLL') {
         const res = Game.rollDice(App.state, player.id);
         applyEvents(res.events);
       } else if (App.state.turnPhase === 'AWAITING_PROPERTY_DECISION') {
@@ -144,6 +159,14 @@ async function runOfflineAILoopIfNeeded() {
         const decision = tile ? AI.decideBuy(App.state, player, tile) : 'SKIP';
         const res = Game.buyProperty(App.state, player.id, decision);
         applyEvents(res.events);
+        renderAll();
+        persistOfflineSave();
+        if (App.state.turnPhase === 'AWAITING_AUCTION') {
+          App.aiRunningOffline = false; // nhường quyền cho vòng lặp đấu giá riêng
+          await runOfflineAuctionAILoopIfNeeded();
+          App.aiRunningOffline = true;
+        }
+        continue;
       } else if (App.state.turnPhase === 'TURN_DONE') {
         const upgrades = AI.decideUpgrades(App.state, player);
         for (const tileId of upgrades) {
@@ -166,6 +189,37 @@ async function runOfflineAILoopIfNeeded() {
     }
   } finally {
     App.aiRunningOffline = false;
+  }
+}
+
+/**
+ * Vòng lặp đấu giá offline: tự động xử lý các lượt đấu giá của AI cho đến khi
+ * đến lượt người chơi thật hoặc phiên đấu giá kết thúc.
+ */
+async function runOfflineAuctionAILoopIfNeeded() {
+  if (App.mode !== 'offline' || App.auctionRunningOffline) return;
+  App.auctionRunningOffline = true;
+  try {
+    while (App.state && App.state.turnPhase === 'AWAITING_AUCTION' && App.state.auction) {
+      const actor = App.state.players.find((p) => p.id === App.state.auction.currentTurnId);
+      if (!actor || !actor.isAI) break;
+      UI.setAIThinking(true);
+      await sleep(AI.getThinkingDelay(actor.personality));
+      UI.setAIThinking(false);
+      const decision = AI.decideAuctionAction(App.state, actor, App.state.auction);
+      const res =
+        decision && decision.action === 'BID'
+          ? Game.auctionBid(App.state, actor.id, decision.amount)
+          : Game.auctionPass(App.state, actor.id);
+      applyEvents(res.events);
+      renderAll();
+      persistOfflineSave();
+    }
+  } finally {
+    App.auctionRunningOffline = false;
+  }
+  if (App.state && App.state.turnPhase === 'TURN_DONE') {
+    runOfflineAILoopIfNeeded();
   }
 }
 
@@ -314,6 +368,105 @@ function decideProperty(decision) {
   if (res.ok) applyEvents(res.events);
   renderAll();
   persistOfflineSave();
+  if (App.state.turnPhase === 'AWAITING_AUCTION') {
+    runOfflineAuctionAILoopIfNeeded();
+  }
+}
+
+function payBail() {
+  if (App.mode === 'online') {
+    App.conn.send({ type: C2S.PAY_BAIL });
+    return;
+  }
+  const res = Game.payBail(App.state, App.myPlayerId);
+  if (!res.ok) {
+    UI.showToast('Không thể nộp phạt lúc này.', 'error');
+    return;
+  }
+  applyEvents(res.events);
+  renderAll();
+  persistOfflineSave();
+}
+
+function useJailCard() {
+  if (App.mode === 'online') {
+    App.conn.send({ type: C2S.USE_JAIL_CARD });
+    return;
+  }
+  const res = Game.useJailCard(App.state, App.myPlayerId);
+  if (!res.ok) {
+    UI.showToast('Bạn không có Thẻ Ra Tù Miễn Phí.', 'error');
+    return;
+  }
+  applyEvents(res.events);
+  renderAll();
+  persistOfflineSave();
+}
+
+function submitAuctionBid(amount) {
+  const amt = Math.floor(Number(amount));
+  if (!Number.isFinite(amt) || amt <= 0) {
+    UI.showToast('Nhập một mức giá hợp lệ.', 'error');
+    return;
+  }
+  if (App.mode === 'online') {
+    App.conn.send({ type: C2S.AUCTION_BID, amount: amt });
+    return;
+  }
+  const res = Game.auctionBid(App.state, App.myPlayerId, amt);
+  if (!res.ok) {
+    UI.showToast('Giá đấu không hợp lệ (phải cao hơn giá hiện tại và trong khả năng chi trả).', 'error');
+    return;
+  }
+  applyEvents(res.events);
+  renderAll();
+  persistOfflineSave();
+  runOfflineAuctionAILoopIfNeeded();
+  if (App.state.phase === 'ENDED') UI.showGameOverModal(gameOverText());
+}
+
+function submitAuctionPass() {
+  if (App.mode === 'online') {
+    App.conn.send({ type: C2S.AUCTION_PASS });
+    return;
+  }
+  const res = Game.auctionPass(App.state, App.myPlayerId);
+  if (!res.ok) {
+    UI.showToast('Không thể rút khỏi đấu giá lúc này.', 'error');
+    return;
+  }
+  applyEvents(res.events);
+  renderAll();
+  persistOfflineSave();
+  runOfflineAuctionAILoopIfNeeded();
+  if (App.state.phase === 'ENDED') UI.showGameOverModal(gameOverText());
+}
+
+function openManageModal() {
+  if (!App.state) return;
+  const me = App.state.players.find((p) => p.id === App.myPlayerId);
+  if (!me) return;
+  UI.showManageModal(Game.BOARD, me, {
+    onUpgrade: (tileId) => manageAction(() => Game.upgradeProperty(App.state, App.myPlayerId, tileId), C2S.UPGRADE_PROPERTY, tileId),
+    onDowngrade: (tileId) => manageAction(() => Game.downgradeProperty(App.state, App.myPlayerId, tileId), C2S.DOWNGRADE_PROPERTY, tileId),
+    onMortgage: (tileId) => manageAction(() => Game.mortgageProperty(App.state, App.myPlayerId, tileId), C2S.MORTGAGE_PROPERTY, tileId),
+    onUnmortgage: (tileId) => manageAction(() => Game.unmortgageProperty(App.state, App.myPlayerId, tileId), C2S.UNMORTGAGE_PROPERTY, tileId),
+  });
+}
+
+function manageAction(offlineFn, onlineType, tileId) {
+  if (App.mode === 'online') {
+    App.conn.send({ type: onlineType, tileId });
+    return;
+  }
+  const res = offlineFn();
+  if (!res.ok) {
+    UI.showToast('Không thể thực hiện thao tác này lúc này.', 'error');
+    return;
+  }
+  applyEvents(res.events);
+  renderAll();
+  persistOfflineSave();
 }
 
 function endTurn() {
@@ -441,6 +594,9 @@ function renderAll() {
 
   UI.setRollButtonVisible(isMyTurn && App.state.turnPhase === 'AWAITING_ROLL');
   UI.setEndTurnButtonVisible(isMyTurn && App.state.turnPhase === 'TURN_DONE');
+  if (isMyTurn && App.state.turnPhase === 'AWAITING_ROLL') {
+    UI.setRollButtonLabel(current.inJail ? '🎲 Thử đổ đôi (thoát Nhà Giam)' : '🎲 Tung xúc xắc');
+  }
 
   if (isMyTurn && App.state.turnPhase === 'AWAITING_PROPERTY_DECISION') {
     const tile = Game.BOARD.find((t) => t.id === App.state.pendingTileId);
@@ -448,6 +604,16 @@ function renderAll() {
   } else {
     UI.hideModal('modal-buy');
   }
+
+  if (App.state.turnPhase === 'AWAITING_AUCTION' && App.state.auction) {
+    UI.showAuctionPanel(App.state, App.myPlayerId, submitAuctionBid, submitAuctionPass);
+  } else if (isMyTurn && App.state.turnPhase === 'AWAITING_ROLL' && current && current.inJail) {
+    UI.showJailPanel(current, payBail, useJailCard);
+  } else {
+    UI.hideDecisionPanel();
+  }
+
+  UI.updateManageModal(App.state.players.find((p) => p.id === App.myPlayerId));
 }
 
 function applyEvents(events) {
@@ -472,6 +638,45 @@ function applyEvents(events) {
         break;
       case 'PROPERTY_UPGRADED':
         UI.addGameLog(`⬆️ ${playerName(evt.playerId)} nâng cấp ${Game.BOARD.find((t) => t.id === evt.tileId)?.name} lên cấp ${evt.level}.`);
+        break;
+      case 'PROPERTY_DOWNGRADED':
+        UI.addGameLog(`⬇️ ${playerName(evt.playerId)} bán bớt nhà tại ${Game.BOARD.find((t) => t.id === evt.tileId)?.name}, nhận lại ${evt.refund}.`);
+        break;
+      case 'PROPERTY_MORTGAGED':
+        UI.addGameLog(`🏦 ${playerName(evt.playerId)} thế chấp ${Game.BOARD.find((t) => t.id === evt.tileId)?.name}, nhận ${evt.value}.`);
+        break;
+      case 'PROPERTY_UNMORTGAGED':
+        UI.addGameLog(`💳 ${playerName(evt.playerId)} chuộc lại ${Game.BOARD.find((t) => t.id === evt.tileId)?.name}, trả ${evt.cost}.`);
+        break;
+      case 'SENT_TO_JAIL':
+        UI.showToast(`🚔 ${playerName(evt.playerId)} bị đưa vào Nhà Giam!`, 'error');
+        UI.addGameLog(`🚔 ${playerName(evt.playerId)} vào Nhà Giam (${evt.reason}).`);
+        break;
+      case 'JAIL_BAIL_PAID':
+        UI.addGameLog(`💸 ${playerName(evt.playerId)} nộp phạt ${evt.amount} để ra khỏi Nhà Giam.`);
+        break;
+      case 'JAIL_CARD_USED':
+        UI.addGameLog(`🎫 ${playerName(evt.playerId)} dùng Thẻ Ra Tù Miễn Phí.`);
+        break;
+      case 'JAIL_CARD_RECEIVED':
+        UI.addGameLog(`🎫 ${playerName(evt.playerId)} nhận được Thẻ Ra Tù Miễn Phí.`);
+        break;
+      case 'AUCTION_STARTED':
+        UI.addGameLog(`🔨 Đấu giá ${Game.BOARD.find((t) => t.id === evt.tileId)?.name} bắt đầu.`);
+        break;
+      case 'AUCTION_BID_PLACED':
+        UI.addGameLog(`🔨 ${playerName(evt.playerId)} đấu giá ${evt.amount}.`);
+        break;
+      case 'AUCTION_PLAYER_PASSED':
+        UI.addGameLog(`🔨 ${playerName(evt.playerId)} rút khỏi đấu giá.`);
+        break;
+      case 'AUCTION_ENDED':
+        if (evt.winnerId) {
+          UI.showToast(`🔨 ${playerName(evt.winnerId)} thắng đấu giá với giá ${evt.amount}.`, 'money-up');
+          UI.addGameLog(`🔨 ${playerName(evt.winnerId)} thắng đấu giá ${Game.BOARD.find((t) => t.id === evt.tileId)?.name} với giá ${evt.amount}.`);
+        } else {
+          UI.addGameLog(`🔨 Không ai đấu giá ${Game.BOARD.find((t) => t.id === evt.tileId)?.name}.`);
+        }
         break;
       case 'EVENT_TRIGGERED':
         UI.showToast(`${playerName(evt.playerId)}: ${evt.text}`);

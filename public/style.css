@@ -292,6 +292,33 @@ input, select { font-family: inherit; }
 .board-center__turn { font-size: 0.85rem; color: var(--text-dim); margin: 0; }
 .board-center__ai { font-size: 0.8rem; color: var(--teal); margin: 0; }
 .btn--roll { width: 100%; max-width: 200px; }
+.board-center__row { display: flex; gap: 8px; }
+
+/* ---------- Nhà Giam / Đấu giá (trong decision-panel) ---------- */
+.jail-panel, .auction-panel { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.jail-panel__title, .auction-panel__title { margin: 0; font-weight: 700; }
+.jail-panel__actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.auction-panel__bid { margin: 0; font-size: 0.9rem; color: var(--text-dim); }
+.auction-panel__amount { color: var(--gold); font-family: var(--font-mono); font-weight: 700; }
+.auction-panel__form { display: flex; gap: 8px; align-items: center; }
+.auction-panel__form input {
+  width: 90px; min-height: 40px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: var(--bg-alt); color: var(--text); padding: 0 10px; font-family: var(--font-mono);
+}
+.auction-panel__waiting { margin: 0; font-size: 0.85rem; color: var(--text-dim); font-style: italic; }
+
+/* ---------- Quản lý tài sản ---------- */
+.manage-body { display: flex; flex-direction: column; gap: 10px; max-height: 55vh; overflow-y: auto; }
+.manage-empty { color: var(--text-dim); text-align: center; }
+.manage-row {
+  background: var(--bg-alt); border: 1px solid var(--line); border-radius: var(--radius-md);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.manage-row__info { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.manage-row__meta { font-size: 0.8rem; color: var(--text-dim); }
+.manage-row__meta--mortgaged { color: var(--coral); }
+.manage-row__actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.manage-row__actions .btn[disabled] { opacity: 0.35; pointer-events: none; }
 
 .hud {
   display: flex;

@@ -23,6 +23,9 @@ export const PASS_START_BONUS = 200;
 export const MAX_HOUSE_LEVEL = 5; // 0..4 nhà + 1 khách sạn = level 5
 export const JAIL_TILE_ID = 10;
 export const MAX_JAIL_TURNS = 3;
+export const JAIL_BAIL_AMOUNT = 50;
+export const MORTGAGE_INTEREST_RATE = 0.1; // 10% lãi khi chuộc lại tài sản đã thế chấp
+export const DOUBLES_TO_JAIL = 3; // đổ đôi 3 lần liên tiếp thì vào Nhà Giam
 
 export const PLAYER_COLORS = ['#F2B84B', '#3FC1C9', '#E85A4F', '#9B8CF2'];
 
@@ -63,6 +66,17 @@ export const BOARD = Object.freeze([
 
 export const BOARD_SIZE = BOARD.length;
 
+// Giá trị thế chấp = một nửa giá mua (làm tròn xuống), theo luật board-game đầu tư kinh điển.
+export function mortgageValueOf(tile) {
+  return Math.floor(tile.price / 2);
+}
+
+// Chi phí chuộc lại = giá trị thế chấp + lãi suất (làm tròn lên).
+export function unmortgageCostOf(tile) {
+  const value = mortgageValueOf(tile);
+  return value + Math.ceil(value * MORTGAGE_INTEREST_RATE);
+}
+
 const CHANCE_CARDS = [
   { text: 'Bạn trúng vé số! Nhận 200', money: 200 },
   { text: 'Bạn bị phạt vi phạm giao thông. Mất 100', money: -100 },
@@ -72,6 +86,8 @@ const CHANCE_CARDS = [
   { text: 'Được miễn thuế kỳ này', money: 0 },
   { text: 'Bảo trì nhà cửa. Mất 75', money: -75 },
   { text: 'Nhận thưởng cuối năm. Nhận 300', money: 300 },
+  { text: 'Bạn bị bắt vì đầu cơ đất! Vào thẳng Nhà Giam', toJail: true },
+  { text: 'Bạn nhận được Thẻ Ra Tù Miễn Phí, giữ để dùng khi cần', jailCard: true },
 ];
 
 const EVENT_CARDS = [
@@ -80,6 +96,7 @@ const EVENT_CARDS = [
   { text: 'Bạn được mời dự tiệc, quen biết đối tác mới. Nhận 100', money: 100 },
   { text: 'Sửa đường ống nước. Mất 120', money: -120 },
   { text: 'Dịch chuyển ngẫu nhiên!', teleport: true },
+  { text: 'Thanh tra thuế phát hiện sai phạm! Vào thẳng Nhà Giam', toJail: true },
 ];
 
 export function randInt(min, max) {
@@ -103,6 +120,7 @@ export function createPlayer({ id, name, isAI = false, personality = null, color
     bankrupt: false,
     inJail: false,
     jailTurns: 0,
+    jailCards: 0,
     connected: true,
   };
 }
@@ -119,11 +137,12 @@ export function createInitialState(roomId, players) {
     board: BOARD,
     players,
     turnIndex: 0,
-    turnPhase: 'AWAITING_ROLL', // AWAITING_ROLL | AWAITING_PROPERTY_DECISION | AWAITING_UPGRADE | TURN_DONE
+    turnPhase: 'AWAITING_ROLL', // AWAITING_ROLL | AWAITING_PROPERTY_DECISION | AWAITING_AUCTION | TURN_DONE
     lastDice: null,
     doublesStreak: 0,
     pendingTileId: null,
     pendingOffer: null,
+    auction: null,
     winnerId: null,
     log: [],
     aiMemory: {},
@@ -170,6 +189,15 @@ export function startGame(state) {
   return { ok: true, events: [{ type: 'GAME_STARTED' }] };
 }
 
+function sendToJail(state, player, events, reason) {
+  player.position = JAIL_TILE_ID;
+  player.inJail = true;
+  player.jailTurns = 0;
+  state.doublesStreak = 0;
+  pushLog(state, `${player.name} bị đưa vào Nhà Giam${reason ? ` (${reason})` : ''}.`);
+  events.push({ type: 'SENT_TO_JAIL', playerId: player.id, reason: reason || 'CARD' });
+}
+
 export function rollDice(state, playerId) {
   const player = currentPlayer(state);
   if (!player || player.id !== playerId) return { ok: false, error: 'NOT_YOUR_TURN' };
@@ -182,6 +210,7 @@ export function rollDice(state, playerId) {
   const isDouble = dice[0] === dice[1];
   events.push({ type: 'DICE_RESULT', playerId, dice });
 
+  const wasInJail = player.inJail;
   if (player.inJail) {
     if (isDouble) {
       player.inJail = false;
@@ -192,15 +221,33 @@ export function rollDice(state, playerId) {
       if (player.jailTurns >= MAX_JAIL_TURNS) {
         player.inJail = false;
         player.jailTurns = 0;
-        player.money -= 50;
-        pushLog(state, `${player.name} nộp phạt 50 để ra khỏi Nhà Giam.`);
-        events.push({ type: 'MONEY_CHANGED', playerId, delta: -50, reason: 'JAIL_FINE' });
+        player.money -= JAIL_BAIL_AMOUNT;
+        pushLog(state, `${player.name} nộp phạt ${JAIL_BAIL_AMOUNT} để ra khỏi Nhà Giam.`);
+        events.push({ type: 'MONEY_CHANGED', playerId, delta: -JAIL_BAIL_AMOUNT, reason: 'JAIL_FINE' });
       } else {
         pushLog(state, `${player.name} vẫn còn trong Nhà Giam (${player.jailTurns}/${MAX_JAIL_TURNS}).`);
         state.turnPhase = 'TURN_DONE';
         return { ok: true, events };
       }
     }
+  }
+
+  // Đôi 3 lần liên tiếp thì bị bắt vào Nhà Giam ngay, không được di chuyển theo xúc xắc.
+  // Chuỗi đôi được tính lại từ đầu mỗi khi vừa ra khỏi Nhà Giam (dù thoát bằng đôi hay nộp phạt).
+  if (wasInJail) {
+    state.doublesStreak = 0;
+  }
+  if (isDouble) {
+    state.doublesStreak += 1;
+  } else {
+    state.doublesStreak = 0;
+  }
+  if (!wasInJail && state.doublesStreak >= DOUBLES_TO_JAIL) {
+    state.doublesStreak = 0;
+    state.turnPhase = 'TURN_DONE';
+    sendToJail(state, player, events, 'Đổ đôi 3 lần liên tiếp');
+    checkBankruptcy(state, player, events);
+    return { ok: true, events, isDouble, sentToJail: true };
   }
 
   const steps = dice[0] + dice[1];
@@ -216,18 +263,46 @@ export function rollDice(state, playerId) {
     events.push({ type: 'MONEY_CHANGED', playerId, delta: PASS_START_BONUS, reason: 'PASS_START' });
   }
 
-  if (isDouble) {
-    state.doublesStreak += 1;
-  } else {
-    state.doublesStreak = 0;
-  }
-
   const tileEvents = resolveTile(state, player);
   events.push(...tileEvents);
 
   checkBankruptcy(state, player, events);
 
   return { ok: true, events, isDouble };
+}
+
+/** Người chơi tự nguyện nộp phạt để ra khỏi Nhà Giam ngay khi đến lượt, thay vì thử đổ đôi. */
+export function payBail(state, playerId) {
+  const player = currentPlayer(state);
+  if (!player || player.id !== playerId) return { ok: false, error: 'NOT_YOUR_TURN' };
+  if (state.turnPhase !== 'AWAITING_ROLL') return { ok: false, error: 'WRONG_PHASE' };
+  if (!player.inJail) return { ok: false, error: 'NOT_IN_JAIL' };
+  if (player.money < JAIL_BAIL_AMOUNT) return { ok: false, error: 'INSUFFICIENT_FUNDS' };
+
+  player.money -= JAIL_BAIL_AMOUNT;
+  player.inJail = false;
+  player.jailTurns = 0;
+  pushLog(state, `${player.name} tự nguyện nộp phạt ${JAIL_BAIL_AMOUNT} để ra khỏi Nhà Giam.`);
+  const events = [
+    { type: 'JAIL_BAIL_PAID', playerId, amount: JAIL_BAIL_AMOUNT },
+    { type: 'MONEY_CHANGED', playerId, delta: -JAIL_BAIL_AMOUNT, reason: 'JAIL_FINE' },
+  ];
+  return { ok: true, events };
+}
+
+/** Dùng Thẻ Ra Tù Miễn Phí để thoát khỏi Nhà Giam ngay khi đến lượt. */
+export function useJailCard(state, playerId) {
+  const player = currentPlayer(state);
+  if (!player || player.id !== playerId) return { ok: false, error: 'NOT_YOUR_TURN' };
+  if (state.turnPhase !== 'AWAITING_ROLL') return { ok: false, error: 'WRONG_PHASE' };
+  if (!player.inJail) return { ok: false, error: 'NOT_IN_JAIL' };
+  if (!player.jailCards || player.jailCards < 1) return { ok: false, error: 'NO_JAIL_CARD' };
+
+  player.jailCards -= 1;
+  player.inJail = false;
+  player.jailTurns = 0;
+  pushLog(state, `${player.name} dùng Thẻ Ra Tù Miễn Phí.`);
+  return { ok: true, events: [{ type: 'JAIL_CARD_USED', playerId }] };
 }
 
 function resolveTile(state, player) {
@@ -242,14 +317,18 @@ function resolveTile(state, player) {
         state.turnPhase = 'AWAITING_PROPERTY_DECISION';
         events.push({ type: 'PROPERTY_OFFER', tileId: tile.id, playerId: player.id, price: tile.price });
       } else if (owner.id !== player.id) {
-        const level = ownedGroupLevel(state, owner, tile);
-        const rent = tile.rent[Math.min(level, tile.rent.length - 1)];
-        const paid = Math.min(rent, Math.max(player.money, 0));
-        player.money -= rent;
-        owner.money += rent;
-        pushLog(state, `${player.name} trả ${rent} tiền thuê cho ${owner.name} tại ${tile.name}.`);
-        events.push({ type: 'RENT_PAID', from: player.id, to: owner.id, tileId: tile.id, amount: rent });
-        state.turnPhase = 'TURN_DONE';
+        if (tile.mortgaged) {
+          pushLog(state, `${tile.name} đang bị thế chấp, ${owner.name} không thu được tiền thuê.`);
+          state.turnPhase = 'TURN_DONE';
+        } else {
+          const level = ownedGroupLevel(state, owner, tile);
+          const rent = tile.rent[Math.min(level, tile.rent.length - 1)];
+          player.money -= rent;
+          owner.money += rent;
+          pushLog(state, `${player.name} trả ${rent} tiền thuê cho ${owner.name} tại ${tile.name}.`);
+          events.push({ type: 'RENT_PAID', from: player.id, to: owner.id, tileId: tile.id, amount: rent });
+          state.turnPhase = 'TURN_DONE';
+        }
       } else {
         state.turnPhase = 'TURN_DONE';
       }
@@ -327,6 +406,13 @@ function applyCard(state, player, card) {
     events.push({ type: 'PLAYER_MOVED', playerId: player.id, from, to, teleport: true });
     events.push(...resolveTile(state, player));
   }
+  if (card.toJail) {
+    sendToJail(state, player, events, 'Rút phải thẻ vào tù');
+  }
+  if (card.jailCard) {
+    player.jailCards = (player.jailCards || 0) + 1;
+    events.push({ type: 'JAIL_CARD_RECEIVED', playerId: player.id });
+  }
   return events;
 }
 
@@ -349,11 +435,13 @@ export function buyProperty(state, playerId, decision) {
     player.properties.push(tile.id);
     pushLog(state, `${player.name} mua ${tile.name} với giá ${tile.price}.`);
     events.push({ type: 'PROPERTY_PURCHASED', playerId, tileId: tile.id, price: tile.price });
+    state.pendingTileId = null;
+    state.turnPhase = 'TURN_DONE';
   } else {
-    pushLog(state, `${player.name} bỏ qua ${tile.name}.`);
+    pushLog(state, `${player.name} bỏ qua ${tile.name}, tài sản được đưa ra đấu giá.`);
+    state.pendingTileId = null;
+    events.push(...startAuction(state, tile.id));
   }
-  state.pendingTileId = null;
-  state.turnPhase = 'TURN_DONE';
   return { ok: true, events };
 }
 
@@ -363,10 +451,13 @@ export function upgradeProperty(state, playerId, tileId) {
   const tile = BOARD.find((t) => t.id === tileId);
   if (!tile || tile.type !== TILE_TYPES.PROPERTY) return { ok: false, error: 'PROPERTY_NOT_FOUND' };
   if (!player.properties.includes(tileId)) return { ok: false, error: 'INVALID_ACTION' };
+  if (tile.mortgaged) return { ok: false, error: 'ALREADY_MORTGAGED' };
 
   const groupTiles = BOARD.filter((t) => t.type === TILE_TYPES.PROPERTY && t.group === tile.group);
   const ownsGroup = groupTiles.every((t) => player.properties.includes(t.id));
   if (!ownsGroup) return { ok: false, error: 'INVALID_ACTION' };
+  const anyMortgagedInGroup = groupTiles.some((t) => t.mortgaged);
+  if (anyMortgagedInGroup) return { ok: false, error: 'ALREADY_MORTGAGED' };
 
   const level = tile.level || 0;
   if (level >= MAX_HOUSE_LEVEL - 1) return { ok: false, error: 'INVALID_ACTION' };
@@ -376,6 +467,178 @@ export function upgradeProperty(state, playerId, tileId) {
   tile.level = level + 1;
   pushLog(state, `${player.name} nâng cấp ${tile.name} lên cấp ${tile.level}.`);
   return { ok: true, events: [{ type: 'PROPERTY_UPGRADED', playerId, tileId, level: tile.level }] };
+}
+
+/** Bán bớt một cấp nhà đã xây, hoàn lại một nửa chi phí xây (làm tròn xuống). */
+export function downgradeProperty(state, playerId, tileId) {
+  const player = findPlayer(state, playerId);
+  if (!player) return { ok: false, error: 'INVALID_ACTION' };
+  const tile = BOARD.find((t) => t.id === tileId);
+  if (!tile || tile.type !== TILE_TYPES.PROPERTY) return { ok: false, error: 'PROPERTY_NOT_FOUND' };
+  if (!player.properties.includes(tileId)) return { ok: false, error: 'INVALID_ACTION' };
+
+  const level = tile.level || 0;
+  if (level <= 0) return { ok: false, error: 'INVALID_ACTION' };
+
+  const refund = Math.floor(tile.houseCost / 2);
+  tile.level = level - 1;
+  player.money += refund;
+  pushLog(state, `${player.name} bán bớt nhà tại ${tile.name}, nhận lại ${refund}.`);
+  return { ok: true, events: [{ type: 'PROPERTY_DOWNGRADED', playerId, tileId, level: tile.level, refund }] };
+}
+
+/** Thế chấp một bất động sản (chưa xây nhà) để nhận tiền mặt ngay. */
+export function mortgageProperty(state, playerId, tileId) {
+  const player = findPlayer(state, playerId);
+  if (!player) return { ok: false, error: 'INVALID_ACTION' };
+  const tile = BOARD.find((t) => t.id === tileId);
+  if (!tile || tile.type !== TILE_TYPES.PROPERTY) return { ok: false, error: 'PROPERTY_NOT_FOUND' };
+  if (!player.properties.includes(tileId)) return { ok: false, error: 'INVALID_ACTION' };
+  if (tile.mortgaged) return { ok: false, error: 'ALREADY_MORTGAGED' };
+  if ((tile.level || 0) > 0) return { ok: false, error: 'HAS_BUILDINGS' };
+
+  const value = mortgageValueOf(tile);
+  tile.mortgaged = true;
+  player.money += value;
+  pushLog(state, `${player.name} thế chấp ${tile.name}, nhận ${value}.`);
+  return { ok: true, events: [{ type: 'PROPERTY_MORTGAGED', playerId, tileId, value }] };
+}
+
+/** Chuộc lại một bất động sản đã thế chấp (trả giá trị thế chấp + lãi suất). */
+export function unmortgageProperty(state, playerId, tileId) {
+  const player = findPlayer(state, playerId);
+  if (!player) return { ok: false, error: 'INVALID_ACTION' };
+  const tile = BOARD.find((t) => t.id === tileId);
+  if (!tile || tile.type !== TILE_TYPES.PROPERTY) return { ok: false, error: 'PROPERTY_NOT_FOUND' };
+  if (!player.properties.includes(tileId)) return { ok: false, error: 'INVALID_ACTION' };
+  if (!tile.mortgaged) return { ok: false, error: 'NOT_MORTGAGED' };
+
+  const cost = unmortgageCostOf(tile);
+  if (player.money < cost) return { ok: false, error: 'INSUFFICIENT_FUNDS' };
+
+  player.money -= cost;
+  tile.mortgaged = false;
+  pushLog(state, `${player.name} chuộc lại ${tile.name} với giá ${cost}.`);
+  return { ok: true, events: [{ type: 'PROPERTY_UNMORTGAGED', playerId, tileId, cost }] };
+}
+
+/* --------------------------------- Đấu giá --------------------------------- */
+
+function nextAuctionActor(auction) {
+  const stillIn = auction.turnOrder.filter((id) => !auction.passed.includes(id));
+  if (stillIn.length <= 1) return null;
+  const candidates = stillIn.filter((id) => id !== auction.highestBidder);
+  if (candidates.length === 0) return null;
+  const startIdx = auction.turnOrder.indexOf(auction.currentTurnId);
+  for (let i = 1; i <= auction.turnOrder.length; i += 1) {
+    const idx = (startIdx + i) % auction.turnOrder.length;
+    const candidate = auction.turnOrder[idx];
+    if (candidates.includes(candidate)) return candidate;
+  }
+  return candidates[0];
+}
+
+function startAuction(state, tileId) {
+  const n = state.players.length;
+  const order = [];
+  for (let i = 1; i <= n; i += 1) {
+    const idx = (state.turnIndex + i) % n;
+    const p = state.players[idx];
+    if (p && !p.bankrupt) order.push(p.id);
+  }
+  const events = [];
+  if (order.length === 0) {
+    state.turnPhase = 'TURN_DONE';
+    return events;
+  }
+  state.auction = {
+    tileId,
+    turnOrder: order,
+    passed: [],
+    highestBid: 0,
+    highestBidder: null,
+    currentTurnId: order[0],
+  };
+  state.turnPhase = 'AWAITING_AUCTION';
+  const tile = BOARD.find((t) => t.id === tileId);
+  pushLog(state, `Đấu giá ${tile?.name} bắt đầu.`);
+  events.push({ type: 'AUCTION_STARTED', tileId, turnOrder: order, currentTurnId: order[0] });
+  return events;
+}
+
+function endAuction(state) {
+  const auction = state.auction;
+  const tile = BOARD.find((t) => t.id === auction.tileId);
+  const events = [];
+  const stillIn = auction.turnOrder.filter((id) => !auction.passed.includes(id));
+  const candidateWinner = stillIn.find((id) => id === auction.highestBidder) || stillIn[0] || null;
+  const winnerId = auction.highestBid > 0 && candidateWinner ? candidateWinner : null;
+
+  if (winnerId) {
+    const winner = findPlayer(state, winnerId);
+    winner.money -= auction.highestBid;
+    winner.properties.push(tile.id);
+    pushLog(state, `${winner.name} thắng đấu giá ${tile.name} với giá ${auction.highestBid}.`);
+    events.push({ type: 'AUCTION_ENDED', tileId: tile.id, winnerId, amount: auction.highestBid });
+    events.push({ type: 'PROPERTY_PURCHASED', playerId: winnerId, tileId: tile.id, price: auction.highestBid, viaAuction: true });
+    checkBankruptcy(state, winner, events);
+  } else {
+    pushLog(state, `Không ai đấu giá ${tile.name}, bất động sản vẫn bỏ trống.`);
+    events.push({ type: 'AUCTION_ENDED', tileId: tile.id, winnerId: null, amount: 0 });
+  }
+
+  state.auction = null;
+  state.turnPhase = 'TURN_DONE';
+  return events;
+}
+
+export function auctionBid(state, playerId, amount) {
+  const auction = state.auction;
+  if (!auction || state.turnPhase !== 'AWAITING_AUCTION') return { ok: false, error: 'NOT_IN_AUCTION' };
+  if (auction.currentTurnId !== playerId) return { ok: false, error: 'NOT_YOUR_TURN' };
+  if (auction.passed.includes(playerId)) return { ok: false, error: 'NOT_IN_AUCTION' };
+
+  const amt = Math.floor(Number(amount));
+  if (!Number.isFinite(amt) || amt <= auction.highestBid) return { ok: false, error: 'BID_TOO_LOW' };
+  const player = findPlayer(state, playerId);
+  if (!player || player.money < amt) return { ok: false, error: 'INSUFFICIENT_FUNDS' };
+
+  auction.highestBid = amt;
+  auction.highestBidder = playerId;
+  pushLog(state, `${player.name} đấu giá ${amt}.`);
+  const events = [{ type: 'AUCTION_BID_PLACED', playerId, amount: amt, tileId: auction.tileId }];
+
+  const stillIn = auction.turnOrder.filter((id) => !auction.passed.includes(id));
+  if (stillIn.length <= 1) {
+    events.push(...endAuction(state));
+  } else {
+    const next = nextAuctionActor(auction);
+    auction.currentTurnId = next || auction.currentTurnId;
+    if (!next) events.push(...endAuction(state));
+  }
+  return { ok: true, events };
+}
+
+export function auctionPass(state, playerId) {
+  const auction = state.auction;
+  if (!auction || state.turnPhase !== 'AWAITING_AUCTION') return { ok: false, error: 'NOT_IN_AUCTION' };
+  if (auction.currentTurnId !== playerId) return { ok: false, error: 'NOT_YOUR_TURN' };
+  if (auction.passed.includes(playerId)) return { ok: false, error: 'NOT_IN_AUCTION' };
+
+  const player = findPlayer(state, playerId);
+  auction.passed.push(playerId);
+  pushLog(state, `${player?.name || '???'} rút khỏi đấu giá.`);
+  const events = [{ type: 'AUCTION_PLAYER_PASSED', playerId, tileId: auction.tileId }];
+
+  const stillIn = auction.turnOrder.filter((id) => !auction.passed.includes(id));
+  if (stillIn.length <= 1) {
+    events.push(...endAuction(state));
+  } else {
+    const next = nextAuctionActor(auction);
+    auction.currentTurnId = next || auction.currentTurnId;
+    if (!next) events.push(...endAuction(state));
+  }
+  return { ok: true, events };
 }
 
 export function proposeTrade(state, fromId, offer) {
@@ -424,7 +687,7 @@ export function respondTrade(state, playerId, accept) {
 export function checkBankruptcy(state, player, events) {
   if (player.bankrupt) return;
   if (player.money < 0) {
-    // Bán bớt nhà trước khi tuyên bố phá sản, để giữ cảm giác hợp lý.
+    // Bước 1: bán bớt nhà trên các tài sản đang sở hữu, để giữ cảm giác hợp lý.
     const owned = BOARD.filter((t) => player.properties.includes(t.id) && (t.level || 0) > 0);
     for (const tile of owned) {
       if (player.money >= 0) break;
@@ -434,10 +697,23 @@ export function checkBankruptcy(state, player, events) {
     }
   }
   if (player.money < 0) {
+    // Bước 2: thế chấp các tài sản còn lại (đã hết nhà) để vay thêm tiền mặt.
+    const unmortgaged = BOARD.filter((t) => player.properties.includes(t.id) && !t.mortgaged);
+    for (const tile of unmortgaged) {
+      if (player.money >= 0) break;
+      tile.mortgaged = true;
+      player.money += mortgageValueOf(tile);
+      events.push({ type: 'PROPERTY_MORTGAGED', playerId: player.id, tileId: tile.id, value: mortgageValueOf(tile), auto: true });
+    }
+  }
+  if (player.money < 0) {
     player.bankrupt = true;
     for (const tileId of player.properties) {
       const t = BOARD.find((b) => b.id === tileId);
-      if (t) t.level = 0;
+      if (t) {
+        t.level = 0;
+        t.mortgaged = false;
+      }
     }
     player.properties = [];
     pushLog(state, `${player.name} đã phá sản!`);
@@ -466,7 +742,9 @@ export function endTurn(state, playerId) {
     return { ok: true, events: [{ type: 'GAME_OVER', winnerId }] };
   }
 
-  const keepTurn = state.doublesStreak > 0 && state.doublesStreak < 3 && !player.bankrupt;
+  // Lưu ý: nếu đổ đôi 3 lần liên tiếp, rollDice() đã đưa người chơi vào Nhà Giam và
+  // reset doublesStreak về 0 ngay lúc đó, nên tới đây streak không bao giờ đạt 3.
+  const keepTurn = state.doublesStreak > 0 && !player.bankrupt;
   if (!keepTurn) {
     advanceTurnIndex(state);
     state.doublesStreak = 0;

@@ -1,7 +1,7 @@
 // ui.js
 // Toàn bộ thao tác DOM/hiển thị. Không chứa luật chơi — chỉ vẽ lại những gì
 // game.js truyền vào. Tách riêng để dễ bảo trì và để offline/online dùng chung.
-import { TILE_TYPES } from './gameLogic.js';
+import { TILE_TYPES, MAX_HOUSE_LEVEL, mortgageValueOf, unmortgageCostOf } from './gameLogic.js';
 
 const GROUP_COLORS = {
   A: '#E85A4F', B: '#F2B84B', C: '#3FC1C9', D: '#9B8CF2',
@@ -216,6 +216,10 @@ export function setRollButtonVisible(visible) {
   document.getElementById('btn-roll').hidden = !visible;
 }
 
+export function setRollButtonLabel(text) {
+  document.getElementById('btn-roll').textContent = text;
+}
+
 export function setEndTurnButtonVisible(visible) {
   document.getElementById('btn-end-turn').hidden = !visible;
 }
@@ -230,6 +234,58 @@ export function hideDecisionPanel() {
   const panel = document.getElementById('decision-panel');
   panel.hidden = true;
   panel.innerHTML = '';
+}
+
+/** Bảng hành động khi người chơi đang ở Nhà Giam và đến lượt mình. */
+export function showJailPanel(player, onPayBail, onUseCard) {
+  const html = `
+    <div class="jail-panel">
+      <p class="jail-panel__title">🚔 Bạn đang ở Nhà Giam (lượt ${player.jailTurns}/3)</p>
+      <div class="jail-panel__actions">
+        <button class="btn btn--secondary btn--small" id="jail-pay-bail">💸 Nộp phạt (50)</button>
+        ${player.jailCards > 0 ? `<button class="btn btn--secondary btn--small" id="jail-use-card">🎫 Dùng thẻ ra tù (${player.jailCards})</button>` : ''}
+      </div>
+    </div>
+  `;
+  showDecisionPanel(html);
+  document.getElementById('jail-pay-bail').onclick = onPayBail;
+  const cardBtn = document.getElementById('jail-use-card');
+  if (cardBtn) cardBtn.onclick = onUseCard;
+}
+
+/** Bảng đấu giá — hiển thị giá cao nhất hiện tại, và cho phép người chơi đấu giá/rút lui khi đến lượt. */
+export function showAuctionPanel(state, myPlayerId, onBid, onPass) {
+  const auction = state.auction;
+  const tile = state.board.find((t) => t.id === auction.tileId);
+  const bidderName = (id) => state.players.find((p) => p.id === id)?.name || '???';
+  const isMyTurn = auction.currentTurnId === myPlayerId;
+  const minNext = auction.highestBid + 1;
+
+  const html = `
+    <div class="auction-panel">
+      <p class="auction-panel__title">🔨 Đấu giá: ${escapeHtml(tile?.name || '')}</p>
+      <p class="auction-panel__bid">Giá cao nhất: <span class="auction-panel__amount">${
+        auction.highestBid > 0 ? formatMoney(auction.highestBid) : 'chưa có'
+      }</span>${auction.highestBidder ? ` — ${escapeHtml(bidderName(auction.highestBidder))}` : ''}</p>
+      ${
+        isMyTurn
+          ? `<div class="auction-panel__form">
+               <input id="auction-bid-input" type="number" min="${minNext}" step="1" placeholder="${minNext}" />
+               <button class="btn btn--primary btn--small" id="auction-bid-btn">Đấu giá</button>
+               <button class="btn btn--ghost btn--small" id="auction-pass-btn">Rút lui</button>
+             </div>`
+          : `<p class="auction-panel__waiting">Đang chờ ${escapeHtml(bidderName(auction.currentTurnId))} quyết định...</p>`
+      }
+    </div>
+  `;
+  showDecisionPanel(html);
+  if (isMyTurn) {
+    document.getElementById('auction-bid-btn').onclick = () => {
+      const input = document.getElementById('auction-bid-input');
+      onBid(input.value || minNext);
+    };
+    document.getElementById('auction-pass-btn').onclick = onPass;
+  }
 }
 
 /* -------------------------------- Modals --------------------------------- */
@@ -247,6 +303,81 @@ export function showBuyModal(tile, onBuy, onSkip) {
 
 export function hideModal(id) {
   document.getElementById(id).hidden = true;
+}
+
+/* ---------------------------- Quản lý tài sản ---------------------------- */
+
+let manageHandlers = null;
+let manageBoard = null;
+let manageListenerAttached = false;
+
+function ensureManageListener() {
+  if (manageListenerAttached) return;
+  manageListenerAttached = true;
+  document.getElementById('manage-body').addEventListener('click', (evt) => {
+    const btn = evt.target.closest('[data-manage]');
+    if (!btn || btn.disabled || !manageHandlers) return;
+    const tileId = Number(btn.dataset.tile);
+    const kind = btn.dataset.manage;
+    if (kind === 'upgrade') manageHandlers.onUpgrade(tileId);
+    else if (kind === 'downgrade') manageHandlers.onDowngrade(tileId);
+    else if (kind === 'mortgage') manageHandlers.onMortgage(tileId);
+    else if (kind === 'unmortgage') manageHandlers.onUnmortgage(tileId);
+  });
+}
+
+function renderManageBody(player) {
+  const body = document.getElementById('manage-body');
+  if (!player || player.properties.length === 0) {
+    body.innerHTML = '<p class="manage-empty">Bạn chưa sở hữu bất động sản nào.</p>';
+    return;
+  }
+  const owned = manageBoard.filter((t) => player.properties.includes(t.id));
+  body.innerHTML = owned
+    .map((tile) => {
+      const level = tile.level || 0;
+      const mortgaged = !!tile.mortgaged;
+      const groupTiles = manageBoard.filter((t) => t.type === TILE_TYPES.PROPERTY && t.group === tile.group);
+      const ownsGroup = groupTiles.every((t) => player.properties.includes(t.id));
+      const anyMortgagedInGroup = groupTiles.some((t) => t.mortgaged);
+      const canUpgrade = ownsGroup && !mortgaged && !anyMortgagedInGroup && level < MAX_HOUSE_LEVEL - 1 && player.money >= tile.houseCost;
+      const canDowngrade = level > 0;
+      const canMortgage = !mortgaged && level === 0;
+      const canUnmortgage = mortgaged;
+      const mortgageValue = mortgageValueOf(tile);
+      const unmortgageCost = unmortgageCostOf(tile);
+      const statusText = mortgaged ? 'Đã thế chấp' : level > 0 ? `Cấp ${level}` : 'Đất trống';
+      return `
+        <div class="manage-row">
+          <div class="manage-row__info">
+            <strong>${escapeHtml(tile.name)}</strong>
+            <span class="manage-row__meta ${mortgaged ? 'manage-row__meta--mortgaged' : ''}">${statusText}</span>
+          </div>
+          <div class="manage-row__actions">
+            <button class="btn btn--ghost btn--small" data-manage="upgrade" data-tile="${tile.id}" ${canUpgrade ? '' : 'disabled'}>⬆️ Nâng cấp (${tile.houseCost})</button>
+            <button class="btn btn--ghost btn--small" data-manage="downgrade" data-tile="${tile.id}" ${canDowngrade ? '' : 'disabled'}>⬇️ Bán nhà</button>
+            <button class="btn btn--ghost btn--small" data-manage="mortgage" data-tile="${tile.id}" ${canMortgage ? '' : 'disabled'}>🏦 Thế chấp (+${mortgageValue})</button>
+            <button class="btn btn--ghost btn--small" data-manage="unmortgage" data-tile="${tile.id}" ${canUnmortgage ? '' : 'disabled'}>💳 Chuộc lại (-${unmortgageCost})</button>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+}
+
+export function showManageModal(board, player, handlers) {
+  manageBoard = board;
+  manageHandlers = handlers;
+  ensureManageListener();
+  document.getElementById('modal-manage').hidden = false;
+  renderManageBody(player);
+}
+
+/** Vẽ lại nội dung modal quản lý tài sản nếu đang mở (gọi sau mỗi lần state thay đổi). */
+export function updateManageModal(player) {
+  const modal = document.getElementById('modal-manage');
+  if (!modal || modal.hidden || !manageBoard) return;
+  renderManageBody(player);
 }
 
 export function showGameOverModal(text) {

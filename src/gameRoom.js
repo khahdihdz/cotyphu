@@ -22,6 +22,7 @@ export class GameRoom {
     this.sessions = new Map();
     this.game = null; // đã load từ storage khi cần
     this.aiRunning = false;
+    this.auctionRunning = false;
     this.loaded = false;
   }
 
@@ -235,6 +236,41 @@ export class GameRoom {
         return;
       }
 
+      case C2S.DOWNGRADE_PROPERTY: {
+        this.handlePlayerAction(() => Game.downgradeProperty(this.game, playerId, msg.tileId), ws);
+        return;
+      }
+
+      case C2S.MORTGAGE_PROPERTY: {
+        this.handlePlayerAction(() => Game.mortgageProperty(this.game, playerId, msg.tileId), ws);
+        return;
+      }
+
+      case C2S.UNMORTGAGE_PROPERTY: {
+        this.handlePlayerAction(() => Game.unmortgageProperty(this.game, playerId, msg.tileId), ws);
+        return;
+      }
+
+      case C2S.PAY_BAIL: {
+        this.handlePlayerAction(() => Game.payBail(this.game, playerId), ws);
+        return;
+      }
+
+      case C2S.USE_JAIL_CARD: {
+        this.handlePlayerAction(() => Game.useJailCard(this.game, playerId), ws);
+        return;
+      }
+
+      case C2S.AUCTION_BID: {
+        this.handlePlayerAction(() => Game.auctionBid(this.game, playerId, msg.amount), ws);
+        return;
+      }
+
+      case C2S.AUCTION_PASS: {
+        this.handlePlayerAction(() => Game.auctionPass(this.game, playerId), ws);
+        return;
+      }
+
       case C2S.END_TURN: {
         this.handlePlayerAction(() => Game.endTurn(this.game, playerId), ws, true);
         return;
@@ -286,8 +322,47 @@ export class GameRoom {
     await this.persist();
     if (isEndTurn) {
       this.runAILoop();
+    } else if (this.game.turnPhase === 'AWAITING_AUCTION') {
+      this.runAuctionAI();
     } else if (this.game.turnPhase === 'TURN_DONE') {
       // Người chơi vẫn cần tự bấm "Kết thúc lượt" trên UI; nếu là AI thì tự động.
+      this.runAILoop();
+    }
+  }
+
+  /**
+   * Vòng lặp đấu giá: khi đến lượt một AI đấu giá (bất kể AI đó có phải người
+   * đang chơi lượt chính hay không), tự động đấu giá hoặc rút lui. Dừng lại khi
+   * đến lượt một người chơi thật, hoặc khi phiên đấu giá kết thúc.
+   */
+  async runAuctionAI() {
+    if (this.auctionRunning) return;
+    this.auctionRunning = true;
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (!this.game || this.game.turnPhase !== 'AWAITING_AUCTION' || !this.game.auction) break;
+        const actor = this.game.players.find((p) => p.id === this.game.auction.currentTurnId);
+        if (!actor || !actor.isAI) break;
+
+        this.broadcast({ type: S2C.AI_THINKING, playerId: actor.id });
+        await sleep(AI.getThinkingDelay(actor.personality));
+        if (!this.game.auction || this.game.auction.currentTurnId !== actor.id) continue; // trạng thái đã đổi trong lúc chờ
+
+        const decision = AI.decideAuctionAction(this.game, actor, this.game.auction);
+        const res =
+          decision && decision.action === 'BID'
+            ? Game.auctionBid(this.game, actor.id, decision.amount)
+            : Game.auctionPass(this.game, actor.id);
+        if (res.ok) this.broadcast({ type: S2C.GAME_STATE, state: this.game, events: res.events });
+        await this.persist();
+      }
+    } finally {
+      this.auctionRunning = false;
+    }
+    // Đấu giá đã xong (hoặc đến lượt người thật); nếu lượt chính đã TURN_DONE và
+    // người chơi hiện tại là AI, tiếp tục vòng lặp AI chính để họ nâng cấp/kết thúc lượt.
+    if (this.game && this.game.turnPhase === 'TURN_DONE') {
       this.runAILoop();
     }
   }
@@ -384,12 +459,28 @@ export class GameRoom {
       while (true) {
         if (!this.game || this.game.phase !== 'PLAYING') break;
         const player = this.game.players[this.game.turnIndex];
-        if (!player || !player.isAI || player.bankrupt) break;
+        if (!player || !player.isAI) break;
+        // Người chơi vừa phá sản trong lượt của chính mình (ví dụ không trả nổi tiền
+        // thuê) vẫn cần được xử lý một lần cuối để gọi endTurn() và nhường lượt —
+        // nếu không turnIndex sẽ mắc kẹt mãi mãi ở người chơi đã phá sản.
+        if (player.bankrupt && this.game.turnPhase !== 'TURN_DONE') break;
 
         this.broadcast({ type: S2C.AI_THINKING, playerId: player.id });
         await sleep(AI.getThinkingDelay(player.personality));
 
-        if (this.game.turnPhase === 'AWAITING_ROLL') {
+        if (this.game.turnPhase === 'AWAITING_ROLL' && player.inJail) {
+          const jailAction = AI.decideJailAction(this.game, player);
+          if (jailAction === 'PAY_BAIL') {
+            const res = Game.payBail(this.game, player.id);
+            if (res.ok) this.broadcast({ type: S2C.GAME_STATE, state: this.game, events: res.events });
+          } else if (jailAction === 'USE_CARD') {
+            const res = Game.useJailCard(this.game, player.id);
+            if (res.ok) this.broadcast({ type: S2C.GAME_STATE, state: this.game, events: res.events });
+          } else {
+            const res = Game.rollDice(this.game, player.id);
+            if (res.ok) this.broadcast({ type: S2C.GAME_STATE, state: this.game, events: res.events });
+          }
+        } else if (this.game.turnPhase === 'AWAITING_ROLL') {
           const res = Game.rollDice(this.game, player.id);
           if (res.ok) this.broadcast({ type: S2C.GAME_STATE, state: this.game, events: res.events });
         } else if (this.game.turnPhase === 'AWAITING_PROPERTY_DECISION') {
@@ -398,6 +489,11 @@ export class GameRoom {
           const decision = tile ? AI.decideBuy(this.game, player, tile) : 'SKIP';
           const res = Game.buyProperty(this.game, player.id, decision);
           if (res.ok) this.broadcast({ type: S2C.GAME_STATE, state: this.game, events: res.events });
+          if (this.game.turnPhase === 'AWAITING_AUCTION') {
+            await this.persist();
+            await this.runAuctionAI();
+            continue;
+          }
         } else if (this.game.turnPhase === 'TURN_DONE') {
           const upgrades = AI.decideUpgrades(this.game, player);
           for (const tileId of upgrades) {

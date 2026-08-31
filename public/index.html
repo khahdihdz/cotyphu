@@ -137,7 +137,10 @@
       <button class="btn btn--primary btn--roll" id="btn-roll" data-action="roll-dice">TUNG XÚC XẮC</button>
       <div class="board-center__decision" id="decision-panel" hidden></div>
       <button class="btn btn--secondary" id="btn-end-turn" data-action="end-turn" hidden>KẾT THÚC LƯỢT</button>
-      <button class="btn btn--ghost btn--small" id="btn-open-trade" data-action="open-trade">🤝 Giao dịch</button>
+      <div class="board-center__row">
+        <button class="btn btn--ghost btn--small" id="btn-open-trade" data-action="open-trade">🤝 Giao dịch</button>
+        <button class="btn btn--ghost btn--small" id="btn-open-manage" data-action="open-manage">🏦 Tài sản</button>
+      </div>
     </div>
   </div>
 
@@ -168,9 +171,12 @@
     <p><strong>Mục tiêu:</strong> mua đất, xây nhà, thu tiền thuê và khiến đối thủ phá sản trước bạn.</p>
     <p><strong>Lượt chơi:</strong> tung xúc xắc → di chuyển → xử lý ô đang đứng (mua đất, trả thuế, rút thẻ sự kiện...) → kết thúc lượt.</p>
     <p><strong>Đôi (xúc xắc giống nhau):</strong> được đi thêm một lượt, nhưng đổ đôi 3 lần liên tiếp sẽ vào Nhà Giam.</p>
-    <p><strong>Nâng cấp:</strong> chỉ nâng cấp được khi sở hữu trọn bộ một nhóm màu.</p>
+    <p><strong>Nhà Giam:</strong> khi đến lượt, bạn có thể thử đổ đôi để thoát, tự nguyện nộp phạt 50, hoặc dùng Thẻ Ra Tù Miễn Phí nếu có. Sau 3 lượt không thoát được, bạn bị tự động thu phạt 50 và ra tù.</p>
+    <p><strong>Nâng cấp:</strong> chỉ nâng cấp được khi sở hữu trọn bộ một nhóm màu và không có đất nào trong nhóm đang bị thế chấp. Có thể bán bớt nhà để lấy lại một nửa chi phí xây.</p>
+    <p><strong>Thế chấp:</strong> mở nút "🏦 Tài sản" để thế chấp đất trống lấy tiền mặt (nhận nửa giá đất), hoặc chuộc lại (trả nửa giá + 10% lãi). Đất đang thế chấp không thu được tiền thuê và không thể xây nhà.</p>
+    <p><strong>Đấu giá:</strong> nếu bạn bỏ qua một ô đất chưa ai sở hữu, ô đó sẽ được đưa ra đấu giá cho tất cả người chơi (kể cả bạn) — ai trả giá cao nhất sẽ thắng.</p>
     <p><strong>Giao dịch:</strong> đề nghị đổi đất/tiền với người chơi khác ngay trong ván.</p>
-    <p><strong>Phá sản:</strong> hết tiền và không thể thanh toán → bị loại khỏi ván.</p>
+    <p><strong>Phá sản:</strong> khi nợ tiền, bạn tự động bán nhà rồi thế chấp đất để cứu vãn trước; nếu vẫn không đủ, bạn phá sản và bị loại khỏi ván.</p>
   </div>
 </section>
 
@@ -227,6 +233,17 @@
     <div class="modal__actions">
       <button class="btn btn--secondary" data-action="decline-trade">TỪ CHỐI</button>
       <button class="btn btn--primary" data-action="accept-trade">ĐỒNG Ý</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal quản lý tài sản (nâng cấp / bán nhà / thế chấp / chuộc lại) -->
+<div id="modal-manage" class="modal" hidden>
+  <div class="modal__card modal__card--wide">
+    <h3>Quản lý tài sản</h3>
+    <div id="manage-body" class="manage-body"></div>
+    <div class="modal__actions">
+      <button class="btn btn--secondary" data-action="close-manage">ĐÓNG</button>
     </div>
   </div>
 </div>

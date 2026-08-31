@@ -2,7 +2,7 @@
 // AI chạy hoàn toàn ở server-side (bên trong Durable Object) hoặc trong chế độ
 // offline (chạy trên máy người chơi nhưng KHÔNG được nhìn trước xúc xắc/sự kiện
 // tương lai — chỉ hành động dựa trên state hiện tại, giống một người chơi thật).
-import { BOARD, TILE_TYPES, randInt } from './gameLogic.js';
+import { BOARD, TILE_TYPES, randInt, MAX_JAIL_TURNS, JAIL_BAIL_AMOUNT } from './gameLogic.js';
 
 const RISK_TOLERANCE = {
   CAUTIOUS: 0.25,
@@ -96,6 +96,48 @@ export function decideBuy(state, player, tile) {
 function computeReserve(state, player, personality) {
   const ratio = RESERVE_RATIO[personality] ?? 0.2;
   return Math.round(300 * ratio + player.properties.length * 20);
+}
+
+/**
+ * AI đang trong Nhà Giam, đến lượt mình — quyết định trả tự do bằng cách nào.
+ * Trả về 'PAY_BAIL' | 'USE_CARD' | 'ROLL'.
+ */
+export function decideJailAction(state, player) {
+  if (!player.inJail) return 'ROLL';
+  const personality = player.personality || 'RANDOM';
+  if (player.jailCards > 0) return 'USE_CARD';
+  const reserve = computeReserve(state, player, personality);
+  const risk = RISK_TOLERANCE[personality] ?? 0.5;
+  // Cá tính rủi ro thấp (CAUTIOUS) hoặc đang có nhiều đất cần triển khai thì trả tiền ra sớm
+  // để tranh thủ thời gian; cá tính rủi ro cao thì thử vận may đổ đôi trước, tiết kiệm tiền.
+  const eagerToPay = risk < 0.5 || player.jailTurns >= MAX_JAIL_TURNS - 1;
+  if (eagerToPay && player.money - JAIL_BAIL_AMOUNT >= reserve) return 'PAY_BAIL';
+  return 'ROLL';
+}
+
+/**
+ * AI đang tham gia một phiên đấu giá — quyết định đấu giá tiếp hay rút lui.
+ * Trả về { action: 'BID', amount } hoặc { action: 'PASS' }.
+ */
+export function decideAuctionAction(state, player, auction) {
+  const tile = BOARD.find((t) => t.id === auction.tileId);
+  if (!tile) return { action: 'PASS' };
+  const personality = player.personality || 'RANDOM';
+  const reserve = computeReserve(state, player, personality);
+  const memory = state.aiMemory[player.id] || { badInvestments: [], dangerZones: [], knownRich: [], tradeHistory: [] };
+  const baseScore = evaluatePurchase(state, player, tile, memory);
+  const risk = RISK_TOLERANCE[personality] ?? 0.5;
+
+  // Sẵn sàng trả tối đa: kết hợp giá gốc, mức độ mạo hiểm và điểm đánh giá chiến lược.
+  const maxWillingBid = Math.max(0, Math.round(tile.price * (0.4 + risk * 0.8) + baseScore * 0.3));
+  const increment = Math.max(5, Math.round(tile.price * 0.05));
+  const nextBid = auction.highestBid + increment;
+  const affordable = player.money - nextBid >= reserve;
+
+  if (nextBid <= maxWillingBid && affordable) {
+    return { action: 'BID', amount: nextBid };
+  }
+  return { action: 'PASS' };
 }
 
 /**
