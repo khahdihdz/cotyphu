@@ -59,6 +59,7 @@ function tileIcon(tile) {
 export function initBoard(board) {
   const boardEl = document.getElementById('board');
   boardEl.innerHTML = '';
+  for (const id of Object.keys(tokenEls)) delete tokenEls[id];
   for (const tile of board) {
     const { row, col } = tileGridPosition(tile.id);
     const div = document.createElement('div');
@@ -124,10 +125,45 @@ export function renderOwnership(board, players) {
   }
 }
 
+// Giữ lại element token theo playerId qua nhiều lần render, để CSS transition
+// (di chuyển mượt giữa các ô) có tác dụng thay vì bị xoá-vẽ-lại và "nhảy vọt".
+const tokenEls = {};
+
+function getOrCreateToken(player) {
+  const layer = document.getElementById('token-layer');
+  if (!layer) return null;
+  let el = tokenEls[player.id];
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'token';
+    el.dataset.playerId = player.id;
+    layer.appendChild(el);
+    tokenEls[player.id] = el;
+  }
+  el.title = player.name;
+  el.style.background = player.color;
+  return el;
+}
+
+export function clearTileSignals() {
+  document.querySelectorAll('.tile--incoming, .tile--passed, .tile--landed').forEach((el) => {
+    el.classList.remove('tile--incoming', 'tile--passed', 'tile--landed');
+  });
+}
+
 export function renderTokens(players) {
   const layer = document.getElementById('token-layer');
   if (!layer) return;
-  layer.innerHTML = '';
+
+  // Dọn token của người chơi đã phá sản / không còn trong ván.
+  const activeIds = new Set(players.filter((p) => !p.bankrupt).map((p) => p.id));
+  for (const id of Object.keys(tokenEls)) {
+    if (!activeIds.has(id)) {
+      tokenEls[id].remove();
+      delete tokenEls[id];
+    }
+  }
+
   const grouped = {};
   for (const p of players) {
     if (p.bankrupt) continue;
@@ -137,16 +173,88 @@ export function renderTokens(players) {
   for (const [pos, group] of Object.entries(grouped)) {
     const { x, y } = tileCenterPercent(Number(pos));
     group.forEach((p, idx) => {
-      const el = document.createElement('div');
-      el.className = 'token';
-      el.title = p.name;
-      el.style.background = p.color;
+      const el = getOrCreateToken(p);
+      if (!el) return;
       const offset = (idx - (group.length - 1) / 2) * 9;
       el.style.left = `calc(${x}% + ${offset}px - 8px)`;
       el.style.top = `calc(${y}% - 8px)`;
-      layer.appendChild(el);
     });
   }
+}
+
+/**
+ * Di chuyển quân cờ của 1 người chơi từng ô một dọc theo `path` (mảng id ô,
+ * bắt đầu từ ô hiện tại) thay vì nhảy thẳng tới ô đích.
+ * - Ô sắp đến được báo hiệu bằng viền/nền nhấp nháy (tile--incoming).
+ * - Ô vừa đi qua được để lại một vệt sáng mờ dần (tile--passed).
+ * - Dịch chuyển tức thời (thẻ bài/Cổng dịch chuyển) sẽ chớp hiệu ứng "teleport"
+ *   thay vì bước từng ô, vì không có hành trình liên tục để hiển thị.
+ */
+export function animateTokenMove(playerId, path, { stepMs = 170, teleport = false } = {}) {
+  return new Promise((resolve) => {
+    const el = tokenEls[playerId];
+    if (!el || !path || path.length < 2) { resolve(); return; }
+
+    const destTileId = path[path.length - 1];
+
+    if (teleport) {
+      const startTileEl = document.querySelector(`[data-tile-id="${path[0]}"]`);
+      if (startTileEl) startTileEl.classList.add('tile--incoming');
+      el.classList.add('token--teleporting');
+      setTimeout(() => {
+        if (startTileEl) startTileEl.classList.remove('tile--incoming');
+        const { x, y } = tileCenterPercent(destTileId);
+        el.style.left = `calc(${x}% - 8px)`;
+        el.style.top = `calc(${y}% - 8px)`;
+        const destTileEl = document.querySelector(`[data-tile-id="${destTileId}"]`);
+        if (destTileEl) {
+          destTileEl.classList.add('tile--landed');
+          setTimeout(() => destTileEl.classList.remove('tile--landed'), 600);
+        }
+        el.classList.remove('token--teleporting');
+        resolve();
+      }, 180);
+      return;
+    }
+
+    const tileElAt = (tileId) => document.querySelector(`[data-tile-id="${tileId}"]`);
+    let i = 1; // path[0] là ô xuất phát, quân cờ đã đứng sẵn ở đó
+
+    const signalIncoming = (tileId) => {
+      const t = tileElAt(tileId);
+      if (t) t.classList.add('tile--incoming');
+    };
+    const markPassed = (tileId, isFinal) => {
+      const t = tileElAt(tileId);
+      if (!t) return;
+      t.classList.remove('tile--incoming');
+      if (isFinal) {
+        t.classList.add('tile--landed');
+        setTimeout(() => t.classList.remove('tile--landed'), 600);
+      } else {
+        t.classList.add('tile--passed');
+        setTimeout(() => t.classList.remove('tile--passed'), 450);
+      }
+    };
+
+    signalIncoming(path[1]);
+
+    const step = () => {
+      const tileId = path[i];
+      const { x, y } = tileCenterPercent(tileId);
+      el.style.left = `calc(${x}% - 8px)`;
+      el.style.top = `calc(${y}% - 8px)`;
+      const isFinal = i === path.length - 1;
+      if (!isFinal) signalIncoming(path[i + 1]);
+      setTimeout(() => {
+        markPassed(tileId, isFinal);
+        i += 1;
+        if (i < path.length) step();
+        else resolve();
+      }, stepMs);
+    };
+    step();
+  });
 }
 
 /* -------------------------------- HUD ---------------------------------- */

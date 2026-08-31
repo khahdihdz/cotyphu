@@ -149,16 +149,16 @@ async function runOfflineAILoopIfNeeded() {
         if (jailAction === 'PAY_BAIL') res = Game.payBail(App.state, player.id);
         else if (jailAction === 'USE_CARD') res = Game.useJailCard(App.state, player.id);
         else res = Game.rollDice(App.state, player.id);
-        applyEvents(res.events);
+        await applyEvents(res.events);
       } else if (App.state.turnPhase === 'AWAITING_ROLL') {
         const res = Game.rollDice(App.state, player.id);
-        applyEvents(res.events);
+        await applyEvents(res.events);
       } else if (App.state.turnPhase === 'AWAITING_PROPERTY_DECISION') {
         const tile = Game.BOARD.find((t) => t.id === App.state.pendingTileId);
         await sleep(400);
         const decision = tile ? AI.decideBuy(App.state, player, tile) : 'SKIP';
         const res = Game.buyProperty(App.state, player.id, decision);
-        applyEvents(res.events);
+        await applyEvents(res.events);
         renderAll();
         persistOfflineSave();
         if (App.state.turnPhase === 'AWAITING_AUCTION') {
@@ -171,12 +171,12 @@ async function runOfflineAILoopIfNeeded() {
         const upgrades = AI.decideUpgrades(App.state, player);
         for (const tileId of upgrades) {
           const res = Game.upgradeProperty(App.state, player.id, tileId);
-          applyEvents(res.events);
+          await applyEvents(res.events);
           await sleep(250);
         }
         AI.updateAIMemory(App.state);
         const endRes = Game.endTurn(App.state, player.id);
-        applyEvents(endRes.events);
+        await applyEvents(endRes.events);
         if (App.state.phase === 'ENDED') {
           UI.showGameOverModal(gameOverText());
           break;
@@ -211,7 +211,7 @@ async function runOfflineAuctionAILoopIfNeeded() {
         decision && decision.action === 'BID'
           ? Game.auctionBid(App.state, actor.id, decision.amount)
           : Game.auctionPass(App.state, actor.id);
-      applyEvents(res.events);
+      await applyEvents(res.events);
       renderAll();
       persistOfflineSave();
     }
@@ -258,7 +258,7 @@ function connectOnline({ room, name, action }) {
   App.conn.connect({ room, name, action });
 }
 
-function handleServerMessage(msg) {
+async function handleServerMessage(msg) {
   switch (msg.type) {
     case S2C.ROOM_CREATED:
       App.myPlayerId = msg.playerId;
@@ -281,7 +281,7 @@ function handleServerMessage(msg) {
 
     case S2C.GAME_STATE:
       App.state = msg.state;
-      if (msg.events) applyEvents(msg.events);
+      if (msg.events) await applyEvents(msg.events);
       renderAll();
       break;
 
@@ -339,7 +339,7 @@ function leaveRoom() {
 
 /* ============================ HÀNH ĐỘNG CHUNG ============================ */
 
-function rollDice() {
+async function rollDice() {
   if (App.mode === 'online') {
     App.conn.send({ type: C2S.ROLL_DICE });
     return;
@@ -351,7 +351,7 @@ function rollDice() {
     UI.showToast('Không thể tung xúc xắc lúc này.', 'error');
     return;
   }
-  applyEvents(res.events);
+  await applyEvents(res.events);
   renderAll();
   persistOfflineSave();
   if (App.state.turnPhase === 'TURN_DONE' || App.state.phase === 'ENDED') {
@@ -359,13 +359,13 @@ function rollDice() {
   }
 }
 
-function decideProperty(decision) {
+async function decideProperty(decision) {
   if (App.mode === 'online') {
     App.conn.send({ type: decision === 'BUY' ? C2S.BUY_PROPERTY : C2S.SKIP_PROPERTY });
     return;
   }
   const res = Game.buyProperty(App.state, App.myPlayerId, decision);
-  if (res.ok) applyEvents(res.events);
+  if (res.ok) await applyEvents(res.events);
   renderAll();
   persistOfflineSave();
   if (App.state.turnPhase === 'AWAITING_AUCTION') {
@@ -373,7 +373,7 @@ function decideProperty(decision) {
   }
 }
 
-function payBail() {
+async function payBail() {
   if (App.mode === 'online') {
     App.conn.send({ type: C2S.PAY_BAIL });
     return;
@@ -383,12 +383,12 @@ function payBail() {
     UI.showToast('Không thể nộp phạt lúc này.', 'error');
     return;
   }
-  applyEvents(res.events);
+  await applyEvents(res.events);
   renderAll();
   persistOfflineSave();
 }
 
-function useJailCard() {
+async function useJailCard() {
   if (App.mode === 'online') {
     App.conn.send({ type: C2S.USE_JAIL_CARD });
     return;
@@ -398,12 +398,12 @@ function useJailCard() {
     UI.showToast('Bạn không có Thẻ Ra Tù Miễn Phí.', 'error');
     return;
   }
-  applyEvents(res.events);
+  await applyEvents(res.events);
   renderAll();
   persistOfflineSave();
 }
 
-function submitAuctionBid(amount) {
+async function submitAuctionBid(amount) {
   const amt = Math.floor(Number(amount));
   if (!Number.isFinite(amt) || amt <= 0) {
     UI.showToast('Nhập một mức giá hợp lệ.', 'error');
@@ -418,14 +418,14 @@ function submitAuctionBid(amount) {
     UI.showToast('Giá đấu không hợp lệ (phải cao hơn giá hiện tại và trong khả năng chi trả).', 'error');
     return;
   }
-  applyEvents(res.events);
+  await applyEvents(res.events);
   renderAll();
   persistOfflineSave();
   runOfflineAuctionAILoopIfNeeded();
   if (App.state.phase === 'ENDED') UI.showGameOverModal(gameOverText());
 }
 
-function submitAuctionPass() {
+async function submitAuctionPass() {
   if (App.mode === 'online') {
     App.conn.send({ type: C2S.AUCTION_PASS });
     return;
@@ -435,7 +435,7 @@ function submitAuctionPass() {
     UI.showToast('Không thể rút khỏi đấu giá lúc này.', 'error');
     return;
   }
-  applyEvents(res.events);
+  await applyEvents(res.events);
   renderAll();
   persistOfflineSave();
   runOfflineAuctionAILoopIfNeeded();
@@ -454,7 +454,7 @@ function openManageModal() {
   });
 }
 
-function manageAction(offlineFn, onlineType, tileId) {
+async function manageAction(offlineFn, onlineType, tileId) {
   if (App.mode === 'online') {
     App.conn.send({ type: onlineType, tileId });
     return;
@@ -464,18 +464,18 @@ function manageAction(offlineFn, onlineType, tileId) {
     UI.showToast('Không thể thực hiện thao tác này lúc này.', 'error');
     return;
   }
-  applyEvents(res.events);
+  await applyEvents(res.events);
   renderAll();
   persistOfflineSave();
 }
 
-function endTurn() {
+async function endTurn() {
   if (App.mode === 'online') {
     App.conn.send({ type: C2S.END_TURN });
     return;
   }
   const res = Game.endTurn(App.state, App.myPlayerId);
-  if (res.ok) applyEvents(res.events);
+  if (res.ok) await applyEvents(res.events);
   renderAll();
   persistOfflineSave();
   if (App.state.phase === 'ENDED') {
@@ -549,10 +549,10 @@ function sendTrade() {
   }
   const target = App.state.players.find((p) => p.id === toId);
   if (target?.isAI) {
-    setTimeout(() => {
+    setTimeout(async () => {
       const accept = AI.decideTradeResponse(App.state, target, App.state.pendingOffer);
       const respondRes = Game.respondTrade(App.state, target.id, accept);
-      applyEvents(respondRes.events);
+      await applyEvents(respondRes.events);
       renderAll();
       persistOfflineSave();
     }, AI.getThinkingDelay(target.personality));
@@ -616,7 +616,27 @@ function renderAll() {
   UI.updateManageModal(App.state.players.find((p) => p.id === App.myPlayerId));
 }
 
-function applyEvents(events) {
+/**
+ * Xây dựng hành trình từng ô (mảng id ô) để quân cờ đi qua lần lượt, thay vì
+ * nhảy thẳng từ `from` đến `to`. Hướng đi (tiến/lùi) suy ra từ `steps` khi có
+ * (thẻ bài có thể lùi quân), mặc định là tiến (tung xúc xắc luôn tiến, kể cả
+ * khi đi vòng qua ô xuất phát).
+ */
+function buildMovePath(from, to, steps) {
+  const size = Game.BOARD_SIZE;
+  if (from === to) return [from, to];
+  const direction = typeof steps === 'number' && steps < 0 ? -1 : 1;
+  const path = [from];
+  let cur = from;
+  for (let i = 0; i < size; i += 1) {
+    cur = (cur + direction + size) % size;
+    path.push(cur);
+    if (cur === to) break;
+  }
+  return path;
+}
+
+async function applyEvents(events) {
   if (!events) return;
   for (const evt of events) {
     switch (evt.type) {
@@ -624,9 +644,12 @@ function applyEvents(events) {
         UI.renderDice(evt.dice, { rolling: true });
         UI.addGameLog(`🎲 ${playerName(evt.playerId)} đổ được ${evt.dice[0]} + ${evt.dice[1]}.`);
         break;
-      case 'PLAYER_MOVED':
+      case 'PLAYER_MOVED': {
         UI.addGameLog(`${playerName(evt.playerId)} di chuyển tới ${Game.BOARD[evt.to]?.name}.`);
+        const path = evt.teleport ? [evt.from, evt.to] : buildMovePath(evt.from, evt.to, evt.steps);
+        await UI.animateTokenMove(evt.playerId, path, { teleport: !!evt.teleport });
         break;
+      }
       case 'MONEY_CHANGED':
         if (evt.delta) UI.showToast(`${playerName(evt.playerId)} ${evt.delta > 0 ? '+' : ''}${evt.delta} 💰`, evt.delta > 0 ? 'money-up' : 'error');
         break;
