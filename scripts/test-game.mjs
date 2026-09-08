@@ -11,6 +11,8 @@ import {
   rollTwoDice,
   mortgageValueOf,
   unmortgageCostOf,
+  upgradeProperty,
+  getPropertyState,
 } from '../src/gameLogic.js';
 import { GAME_CARDS } from '../src/cards.js';
 
@@ -26,12 +28,16 @@ const players = [
   createPlayer({ id: 'p2', name: 'Người chơi 2', color: '#3FC1C9' }),
 ];
 const state = createInitialState('TEST', players);
+assert.equal(state.cardDeck.CHANCE.length, 30, 'Deck Cơ Hội phải có 30 thẻ');
+assert.equal(state.cardDeck.EVENT.length, 30, 'Deck Sự Kiện phải có 30 thẻ');
 const started = startGame(state);
 assert.equal(started.ok, true, 'Ván 2 người phải khởi động được');
 assert.equal(state.phase, 'PLAYING');
 assert.equal(state.turnNumber, 1);
 assert.equal(state.players.length, 2);
 assert.ok(state.players.every((player) => player.money === START_MONEY));
+assert.equal(state.cardDeck.CHANCE.length, 30, 'Start game phải reset bộ thẻ Cơ Hội');
+assert.equal(state.cardDeck.EVENT.length, 30, 'Start game phải reset bộ thẻ Sự Kiện');
 
 for (let i = 0; i < 100; i += 1) {
   const [a, b] = rollTwoDice();
@@ -44,6 +50,17 @@ assert.ok(property, 'Phải có ô bất động sản');
 assert.equal(mortgageValueOf(property), Math.floor(property.price / 2));
 assert.equal(unmortgageCostOf(property), mortgageValueOf(property) + Math.ceil(mortgageValueOf(property) * 0.1));
 
+// Kiểm tra đầy đủ chuỗi 1→4 nhà→khách sạn (cấp 5).
+state.turnPhase = 'TURN_DONE';
+state.players[0].properties = [1, 3];
+for (let level = 1; level <= MAX_HOUSE_LEVEL; level += 1) {
+  const res = upgradeProperty(state, 'p1', 1);
+  assert.equal(res.ok, true, `Nâng ô 1 lên cấp ${level} phải thành công`);
+  assert.equal(getPropertyState(state, 1).level, level);
+}
+assert.equal(getPropertyState(state, 1).level, 5, 'Cấp 5 phải là khách sạn');
+assert.equal(upgradeProperty(state, 'p1', 1).ok, false, 'Không được xây vượt khách sạn');
+
 for (let count = 2; count <= 6; count += 1) {
   const roster = Array.from({ length: count }, (_, i) =>
     createPlayer({ id: `p${count}-${i}`, name: `P${i + 1}`, color: '#F2B84B' }),
@@ -53,8 +70,9 @@ for (let count = 2; count <= 6; count += 1) {
 }
 
 console.log('✓ 40 ô bàn cờ');
-console.log('✓ 30 thẻ sự kiện');
+console.log('✓ 30 thẻ sự kiện thật + 2 deck runtime');
 console.log('✓ Luật tiền và thế chấp cơ bản');
 console.log('✓ Xúc xắc 1..6');
+console.log('✓ Chuỗi nâng cấp 1→4 nhà→khách sạn cấp 5');
 console.log('✓ Khởi động ván 2..6 người');
 console.log('✓ Tất cả kiểm thử engine cơ bản PASS');
