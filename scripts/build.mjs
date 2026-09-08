@@ -14,6 +14,8 @@ const checks = [
   ['30 thẻ sự kiện', events.length === 30],
   ['12 token', manifest.tokens.length === 12],
   ['5 cấp công trình', manifest.buildings.length === 5],
+  ['8 nhóm asset bàn cờ', manifest.board.length === 8],
+  ['UI asset sheet', manifest.ui?.length === 1],
   ['không dùng asset ngoài', manifest.externalAssets === false],
 ];
 for (const [name, ok] of checks) {
@@ -21,7 +23,7 @@ for (const [name, ok] of checks) {
   console.log(`✓ ${name}`);
 }
 
-const assetPaths = [...manifest.board, ...manifest.characters, ...manifest.tokens, ...manifest.buildings, ...manifest.cards, ...manifest.effects];
+const assetPaths = [...manifest.board, ...manifest.characters, ...manifest.tokens, ...manifest.buildings, ...manifest.cards, ...manifest.effects, ...manifest.ui];
 for (const relative of assetPaths) {
   await access(resolve(root, 'public/assets', relative));
 }
