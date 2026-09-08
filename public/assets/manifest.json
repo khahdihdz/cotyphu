@@ -1,0 +1,10 @@
+{
+  "artDirection":"2D vector cartoon premium, original, non-branded",
+  "board": ["board-background.svg","board-frame.svg","board-center.svg","tile-property.svg","tile-event.svg","tile-tax.svg","tile-jail.svg","tile-start.svg"],
+  "characters": ["anh-minh.svg","chi-lan.svg","ong-chu.svg","nha-dau-tu.svg","doanh-nhan.svg","nha-tham-hiem.svg","ky-su.svg","streamer.svg"],
+  "tokens": ["xe-hoi.svg","may-bay.svg","tau-hoa.svg","chia-khoa.svg","vuong-mien.svg","ten-lua.svg","robot.svg","ngoi-sao.svg","kim-cuong.svg","ruong-bau.svg","meo.svg","cho.svg"],
+  "buildings": ["house-level-1.svg","house-level-2.svg","house-level-3.svg","house-level-4.svg","hotel.svg"],
+  "effects": ["coin-particle.svg","money-pop.svg","dice-glow.svg","purchase-effect.svg","upgrade-effect.svg","bankrupt-effect.svg","confetti.svg","sparkle.svg"],
+  "generated": true,
+  "externalAssets": false
+}
