@@ -1,704 +1,90 @@
 // ui.js
-// Toàn bộ thao tác DOM/hiển thị. Không chứa luật chơi — chỉ vẽ lại những gì
-// game.js truyền vào. Tách riêng để dễ bảo trì và để offline/online dùng chung.
-import { TILE_TYPES, MAX_HOUSE_LEVEL, mortgageValueOf, unmortgageCostOf } from './gameLogic.js';
+// Tầng giao diện thuần DOM. Engine gameLogic.js giữ toàn bộ luật chơi.
+import { TILE_TYPES, MAX_HOUSE_LEVEL, mortgageValueOf, unmortgageCostOf, getPropertyState } from './gameLogic.js';
 
-const GROUP_COLORS = {
-  A: '#E85A4F', B: '#F2B84B', C: '#3FC1C9', D: '#9B8CF2',
-  E: '#5EC97A', F: '#F27DB0', STATION: '#8C97B8',
-};
-
-export function navigateTo(screenId) {
-  // Luôn đóng mọi modal đang mở khi chuyển màn hình — tránh trường hợp một
-  // modal (kết thúc ván, mua đất, giao dịch...) bị kẹt hiển thị đè lên màn
-  // hình mới và chặn hết thao tác của người chơi.
-  hideAllModals();
-  document.querySelectorAll('.screen').forEach((el) => el.classList.remove('screen--active'));
-  const target = document.getElementById(screenId);
-  if (target) target.classList.add('screen--active');
-}
-
-export function hideAllModals() {
-  document.querySelectorAll('.modal').forEach((m) => { m.hidden = true; });
-}
-
-export function showToast(text, variant = '') {
-  const root = document.getElementById('toast-root');
-  const el = document.createElement('div');
-  el.className = `toast ${variant ? `toast--${variant}` : ''}`.trim();
-  el.textContent = text;
-  root.appendChild(el);
-  setTimeout(() => el.remove(), 3200);
-}
-
-export function setReconnectBanner(visible) {
-  document.getElementById('reconnect-banner').hidden = !visible;
-}
-
-/* ------------------------------- Board -------------------------------- */
-
-function tileGridPosition(i) {
-  const n = 9;
-  if (i <= 8) return { row: n, col: n - i };
-  if (i <= 16) return { row: n - (i - 8), col: 1 };
-  if (i <= 24) return { row: 1, col: 1 + (i - 16) };
-  return { row: 1 + (i - 24), col: n };
-}
-
-function tileCenterPercent(i) {
-  const { row, col } = tileGridPosition(i);
-  return { x: ((col - 0.5) / 9) * 100, y: ((row - 0.5) / 9) * 100 };
-}
-
-function tileIcon(tile) {
-  switch (tile.type) {
-    case TILE_TYPES.START: return '🚀';
-    case TILE_TYPES.TAX: return '💸';
-    case TILE_TYPES.CHANCE: return '❓';
-    case TILE_TYPES.EVENT: return '⚡';
-    case TILE_TYPES.BONUS: return '🎁';
-    case TILE_TYPES.REST: return '☕';
-    case TILE_TYPES.JAIL: return '🚔';
-    case TILE_TYPES.TELEPORT: return '🌀';
-    default: return '';
-  }
-}
-
-export function initBoard(board) {
-  const boardEl = document.getElementById('board');
-  boardEl.innerHTML = '';
-  for (const id of Object.keys(tokenEls)) delete tokenEls[id];
-  for (const tile of board) {
-    const { row, col } = tileGridPosition(tile.id);
-    const div = document.createElement('div');
-    div.className = `tile tile--${tile.type}`;
-    div.dataset.tileId = String(tile.id);
-    div.style.gridRow = String(row);
-    div.style.gridColumn = String(col);
-
-    if (tile.type === TILE_TYPES.PROPERTY) {
-      const bar = document.createElement('div');
-      bar.className = 'tile__bar';
-      bar.style.background = GROUP_COLORS[tile.group] || '#888';
-      div.appendChild(bar);
-    }
-
-    const name = document.createElement('div');
-    name.className = 'tile__name';
-    name.textContent = tile.type === TILE_TYPES.PROPERTY || tile.type === TILE_TYPES.TAX ? tile.name : `${tileIcon(tile)} ${tile.name}`;
-    div.appendChild(name);
-
-    if (tile.type === TILE_TYPES.PROPERTY) {
-      const price = document.createElement('div');
-      price.className = 'tile__price';
-      price.textContent = tile.price;
-      div.appendChild(price);
-      const level = document.createElement('div');
-      level.className = 'tile__level';
-      level.dataset.levelFor = String(tile.id);
-      div.appendChild(level);
-      const ownerDot = document.createElement('div');
-      ownerDot.className = 'tile__owner-dot';
-      ownerDot.dataset.ownerFor = String(tile.id);
-      ownerDot.style.background = 'transparent';
-      div.appendChild(ownerDot);
-    }
-    if (tile.type === TILE_TYPES.TAX) {
-      const amt = document.createElement('div');
-      amt.className = 'tile__price';
-      amt.textContent = `-${tile.amount}`;
-      div.appendChild(amt);
-    }
-
-    boardEl.appendChild(div);
-  }
-
-  const tokenLayer = document.createElement('div');
-  tokenLayer.className = 'token-layer';
-  tokenLayer.id = 'token-layer';
-  boardEl.appendChild(tokenLayer);
-}
-
-export function renderOwnership(board, players) {
-  for (const tile of board) {
-    if (tile.type !== TILE_TYPES.PROPERTY) continue;
-    const owner = players.find((p) => p.properties.includes(tile.id));
-    const dot = document.querySelector(`[data-owner-for="${tile.id}"]`);
-    if (dot) dot.style.background = owner ? owner.color : 'transparent';
-    const levelEl = document.querySelector(`[data-level-for="${tile.id}"]`);
-    if (levelEl) {
-      const lvl = tile.level || 0;
-      levelEl.textContent = lvl > 0 ? '🏠'.repeat(Math.min(lvl, 4)) + (lvl >= 5 ? '🏨' : '') : '';
-    }
-  }
-}
-
-// Giữ lại element token theo playerId qua nhiều lần render, để CSS transition
-// (di chuyển mượt giữa các ô) có tác dụng thay vì bị xoá-vẽ-lại và "nhảy vọt".
+const GROUP_COLORS = { A:'#E85A4F', B:'#F2B84B', C:'#3FC1C9', D:'#9B8CF2', E:'#5EC97A', F:'#F27DB0', G:'#6FCF97', H:'#F2994A', STATION:'#8C97B8' };
+const TOKEN_ASSETS = ['xe-hoi.svg','may-bay.svg','tau-hoa.svg','chia-khoa.svg','vuong-mien.svg','ten-lua.svg','robot.svg','ngoi-sao.svg','kim-cuong.svg','ruong-bau.svg','meo.svg','cho.svg'];
 const tokenEls = {};
-
-function getOrCreateToken(player) {
-  const layer = document.getElementById('token-layer');
-  if (!layer) return null;
-  let el = tokenEls[player.id];
-  if (!el) {
-    el = document.createElement('div');
-    el.className = 'token';
-    el.dataset.playerId = player.id;
-    layer.appendChild(el);
-    tokenEls[player.id] = el;
-  }
-  el.title = player.name;
-  el.style.background = player.color;
-  return el;
-}
-
-export function clearTileSignals() {
-  document.querySelectorAll('.tile--incoming, .tile--passed, .tile--landed').forEach((el) => {
-    el.classList.remove('tile--incoming', 'tile--passed', 'tile--landed');
-  });
-}
-
-export function renderTokens(players) {
-  const layer = document.getElementById('token-layer');
-  if (!layer) return;
-
-  // Dọn token của người chơi đã phá sản / không còn trong ván.
-  const activeIds = new Set(players.filter((p) => !p.bankrupt).map((p) => p.id));
-  for (const id of Object.keys(tokenEls)) {
-    if (!activeIds.has(id)) {
-      tokenEls[id].remove();
-      delete tokenEls[id];
-    }
-  }
-
-  const grouped = {};
-  for (const p of players) {
-    if (p.bankrupt) continue;
-    grouped[p.position] = grouped[p.position] || [];
-    grouped[p.position].push(p);
-  }
-  for (const [pos, group] of Object.entries(grouped)) {
-    const { x, y } = tileCenterPercent(Number(pos));
-    group.forEach((p, idx) => {
-      const el = getOrCreateToken(p);
-      if (!el) return;
-      const offset = (idx - (group.length - 1) / 2) * 9;
-      el.style.left = `calc(${x}% + ${offset}px - 8px)`;
-      el.style.top = `calc(${y}% - 8px)`;
-    });
-  }
-}
-
-/**
- * Di chuyển quân cờ của 1 người chơi từng ô một dọc theo `path` (mảng id ô,
- * bắt đầu từ ô hiện tại) thay vì nhảy thẳng tới ô đích.
- * - Ô sắp đến được báo hiệu bằng viền/nền nhấp nháy (tile--incoming).
- * - Ô vừa đi qua được để lại một vệt sáng mờ dần (tile--passed).
- * - Dịch chuyển tức thời (thẻ bài/Cổng dịch chuyển) sẽ chớp hiệu ứng "teleport"
- *   thay vì bước từng ô, vì không có hành trình liên tục để hiển thị.
- */
-export function animateTokenMove(playerId, path, { stepMs = 170, teleport = false } = {}) {
-  return new Promise((resolve) => {
-    const el = tokenEls[playerId];
-    if (!el || !path || path.length < 2) { resolve(); return; }
-
-    const destTileId = path[path.length - 1];
-
-    if (teleport) {
-      const startTileEl = document.querySelector(`[data-tile-id="${path[0]}"]`);
-      if (startTileEl) startTileEl.classList.add('tile--incoming');
-      el.classList.add('token--teleporting');
-      setTimeout(() => {
-        if (startTileEl) startTileEl.classList.remove('tile--incoming');
-        const { x, y } = tileCenterPercent(destTileId);
-        el.style.left = `calc(${x}% - 8px)`;
-        el.style.top = `calc(${y}% - 8px)`;
-        const destTileEl = document.querySelector(`[data-tile-id="${destTileId}"]`);
-        if (destTileEl) {
-          destTileEl.classList.add('tile--landed');
-          setTimeout(() => destTileEl.classList.remove('tile--landed'), 600);
-        }
-        el.classList.remove('token--teleporting');
-        resolve();
-      }, 180);
-      return;
-    }
-
-    const tileElAt = (tileId) => document.querySelector(`[data-tile-id="${tileId}"]`);
-    let i = 1; // path[0] là ô xuất phát, quân cờ đã đứng sẵn ở đó
-
-    const signalIncoming = (tileId) => {
-      const t = tileElAt(tileId);
-      if (t) t.classList.add('tile--incoming');
-    };
-    const markPassed = (tileId, isFinal) => {
-      const t = tileElAt(tileId);
-      if (!t) return;
-      t.classList.remove('tile--incoming');
-      if (isFinal) {
-        t.classList.add('tile--landed');
-        setTimeout(() => t.classList.remove('tile--landed'), 600);
-      } else {
-        t.classList.add('tile--passed');
-        setTimeout(() => t.classList.remove('tile--passed'), 450);
-      }
-    };
-
-    signalIncoming(path[1]);
-
-    const step = () => {
-      const tileId = path[i];
-      const { x, y } = tileCenterPercent(tileId);
-      el.style.left = `calc(${x}% - 8px)`;
-      el.style.top = `calc(${y}% - 8px)`;
-      const isFinal = i === path.length - 1;
-      if (!isFinal) signalIncoming(path[i + 1]);
-      setTimeout(() => {
-        markPassed(tileId, isFinal);
-        i += 1;
-        if (i < path.length) step();
-        else resolve();
-      }, stepMs);
-    };
-    step();
-  });
-}
-
-/* -------------------------------- HUD ---------------------------------- */
-
-export function renderHUD(state, myPlayerId) {
-  const hud = document.getElementById('player-hud');
-  hud.innerHTML = '';
-  state.players.forEach((p, idx) => {
-    const card = document.createElement('div');
-    card.className = 'hud__card';
-    if (idx === state.turnIndex && state.phase === 'PLAYING') card.classList.add('hud__card--active');
-    if (p.bankrupt) card.classList.add('hud__card--bankrupt');
-    card.innerHTML = `
-      <div class="hud__name"><span class="hud__dot" style="background:${p.color}"></span>${escapeHtml(p.name)}${p.isAI ? ' 🤖' : ''}${p.id === myPlayerId ? ' (Bạn)' : ''}</div>
-      <div class="hud__money">${formatMoney(p.money)}</div>
-      <div style="font-size:0.72rem;color:var(--text-dim)">${p.properties.length} BĐS${p.bankrupt ? ' · Phá sản' : ''}</div>
-    `;
-    hud.appendChild(card);
-  });
-}
-
-export function renderTicker(players) {
-  const ticker = document.getElementById('money-ticker');
-  const items = players
-    .map((p) => `<span class="ticker__item ${p.money < 0 ? 'negative' : ''}">${escapeHtml(p.name)}: ${formatMoney(p.money)}</span>`)
-    .join('');
-  ticker.innerHTML = `<div class="ticker__track">${items}${items}</div>`;
-}
-
-export function formatMoney(n) {
-  const sign = n < 0 ? '-' : '';
-  return `${sign}${Math.abs(n).toLocaleString('vi-VN')} 💰`;
-}
-
-function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-/* -------------------------------- Dice ---------------------------------- */
-
-// Cách sắp xếp chấm trên mặt xúc xắc, theo lưới 3x3 (chỉ số 0..8).
-const DIE_PIP_PATTERNS = {
-  1: [4],
-  2: [0, 8],
-  3: [0, 4, 8],
-  4: [0, 2, 6, 8],
-  5: [0, 2, 4, 6, 8],
-  6: [0, 2, 3, 5, 6, 8],
-};
-
-let soundEnabled = true;
-export function setSoundEnabled(enabled) {
-  soundEnabled = !!enabled;
-}
-
-let audioCtx = null;
-function getAudioCtx() {
-  if (!soundEnabled) return null;
-  if (!audioCtx) {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return null;
-    try {
-      audioCtx = new Ctx();
-    } catch (_err) {
-      return null;
-    }
-  }
-  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-  return audioCtx;
-}
-
-/** Tiếng "lắc" ngắn mỗi khi mặt xúc xắc đổi số trong lúc đang lăn. */
-function playDiceTick() {
-  const ctx = getAudioCtx();
-  if (!ctx) return;
-  try {
-    const dur = 0.03;
-    const buffer = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.value = 900 + Math.random() * 700;
-    const gain = ctx.createGain();
-    gain.gain.value = 0.12;
-    noise.connect(filter).connect(gain).connect(ctx.destination);
-    noise.start();
-  } catch (_err) { /* bỏ qua nếu trình duyệt chặn audio */ }
-}
-
-/** Tiếng "cộp" trầm khi xúc xắc dừng hẳn xuống bàn. */
-function playDiceLand() {
-  const ctx = getAudioCtx();
-  if (!ctx) return;
-  try {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(200, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.18);
-  } catch (_err) { /* bỏ qua nếu trình duyệt chặn audio */ }
-}
-
-function ensureDiePips(dieEl) {
-  if (dieEl.childElementCount === 9) return;
-  dieEl.innerHTML = '';
-  for (let i = 0; i < 9; i += 1) {
-    const pip = document.createElement('span');
-    pip.className = 'die__pip';
-    dieEl.appendChild(pip);
-  }
-}
-
-function setDieFace(dieEl, value) {
-  ensureDiePips(dieEl);
-  const active = DIE_PIP_PATTERNS[value] || [];
-  const activeSet = new Set(active);
-  Array.from(dieEl.children).forEach((pip, i) => pip.classList.toggle('die__pip--on', activeSet.has(i)));
-  dieEl.setAttribute('aria-label', String(value));
-}
-
-function randomDieValue() {
-  return 1 + Math.floor(Math.random() * 6);
-}
-
-/**
- * Đổ xúc xắc với hiệu ứng lăn thật: 2 viên xúc xắc rung lắc và đổi mặt liên
- * tục, chậm dần lại rồi "chốt" đúng vào kết quả cuối cùng kèm nảy nhẹ + lóe
- * sáng. Trả về Promise để nơi gọi có thể chờ hiệu ứng chạy xong (ví dụ để
- * quân cờ chỉ bắt đầu di chuyển sau khi xúc xắc đã dừng hẳn).
- */
-function animateDiceRoll(dice) {
-  return new Promise((resolve) => {
-    const d1 = document.getElementById('die-1');
-    const d2 = document.getElementById('die-2');
-    const display = document.getElementById('dice-display');
-    ensureDiePips(d1);
-    ensureDiePips(d2);
-    display?.classList.add('dice-display--rolling');
-    d1.classList.add('die--rolling');
-    d2.classList.add('die--rolling');
-
-    const totalDuration = 650;
-    const start = performance.now();
-    let lastTick = -Infinity;
-
-    function frame(now) {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / totalDuration, 1);
-      const interval = 50 + progress * 160; // đổi mặt nhanh dần chậm lại về cuối
-      if (elapsed - lastTick >= interval) {
-        lastTick = elapsed;
-        setDieFace(d1, randomDieValue());
-        setDieFace(d2, randomDieValue());
-        playDiceTick();
-      }
-      if (elapsed < totalDuration) {
-        requestAnimationFrame(frame);
-        return;
-      }
-      display?.classList.remove('dice-display--rolling');
-      d1.classList.remove('die--rolling');
-      d2.classList.remove('die--rolling');
-      if (dice) {
-        setDieFace(d1, dice[0]);
-        setDieFace(d2, dice[1]);
-      }
-      d1.classList.add('die--landed');
-      d2.classList.add('die--landed');
-      playDiceLand();
-      setTimeout(() => {
-        d1.classList.remove('die--landed');
-        d2.classList.remove('die--landed');
-        resolve();
-      }, 280);
-    }
-    requestAnimationFrame(frame);
-  });
-}
-
-/**
- * Hiển thị kết quả xúc xắc. Khi `rolling` là true sẽ chạy hiệu ứng lăn xúc
- * xắc đầy đủ (xem `animateDiceRoll`) và trả về Promise để nơi gọi `await`
- * cho tới khi xúc xắc dừng hẳn. Khi false chỉ cập nhật mặt xúc xắc ngay lập
- * tức (ví dụ lúc vẽ lại toàn bộ màn hình sau khi tải lại ván offline).
- */
-export function renderDice(dice, { rolling = false } = {}) {
-  if (rolling) return animateDiceRoll(dice);
-  const d1 = document.getElementById('die-1');
-  const d2 = document.getElementById('die-2');
-  if (dice) {
-    setDieFace(d1, dice[0]);
-    setDieFace(d2, dice[1]);
-  }
-  return Promise.resolve();
-}
-
-export function setTurnIndicator(text) {
-  document.getElementById('turn-indicator').textContent = text;
-}
-
-export function setAIThinking(visible) {
-  document.getElementById('ai-thinking-indicator').hidden = !visible;
-}
-
-export function setRollButtonVisible(visible) {
-  document.getElementById('btn-roll').hidden = !visible;
-}
-
-export function setRollButtonLabel(text) {
-  document.getElementById('btn-roll').textContent = text;
-}
-
-export function setEndTurnButtonVisible(visible) {
-  document.getElementById('btn-end-turn').hidden = !visible;
-}
-
-export function showDecisionPanel(html) {
-  const panel = document.getElementById('decision-panel');
-  panel.innerHTML = html;
-  panel.hidden = false;
-}
-
-export function hideDecisionPanel() {
-  const panel = document.getElementById('decision-panel');
-  panel.hidden = true;
-  panel.innerHTML = '';
-}
-
-/** Bảng hành động khi người chơi đang ở Nhà Giam và đến lượt mình. */
-export function showJailPanel(player, onPayBail, onUseCard) {
-  const html = `
-    <div class="jail-panel">
-      <p class="jail-panel__title">🚔 Bạn đang ở Nhà Giam (lượt ${player.jailTurns}/3)</p>
-      <div class="jail-panel__actions">
-        <button class="btn btn--secondary btn--small" id="jail-pay-bail">💸 Nộp phạt (50)</button>
-        ${player.jailCards > 0 ? `<button class="btn btn--secondary btn--small" id="jail-use-card">🎫 Dùng thẻ ra tù (${player.jailCards})</button>` : ''}
-      </div>
-    </div>
-  `;
-  showDecisionPanel(html);
-  document.getElementById('jail-pay-bail').onclick = onPayBail;
-  const cardBtn = document.getElementById('jail-use-card');
-  if (cardBtn) cardBtn.onclick = onUseCard;
-}
-
-/** Bảng đấu giá — hiển thị giá cao nhất hiện tại, và cho phép người chơi đấu giá/rút lui khi đến lượt. */
-export function showAuctionPanel(state, myPlayerId, onBid, onPass) {
-  const auction = state.auction;
-  const tile = state.board.find((t) => t.id === auction.tileId);
-  const bidderName = (id) => state.players.find((p) => p.id === id)?.name || '???';
-  const isMyTurn = auction.currentTurnId === myPlayerId;
-  const minNext = auction.highestBid + 1;
-
-  const html = `
-    <div class="auction-panel">
-      <p class="auction-panel__title">🔨 Đấu giá: ${escapeHtml(tile?.name || '')}</p>
-      <p class="auction-panel__bid">Giá cao nhất: <span class="auction-panel__amount">${
-        auction.highestBid > 0 ? formatMoney(auction.highestBid) : 'chưa có'
-      }</span>${auction.highestBidder ? ` — ${escapeHtml(bidderName(auction.highestBidder))}` : ''}</p>
-      ${
-        isMyTurn
-          ? `<div class="auction-panel__form">
-               <input id="auction-bid-input" type="number" min="${minNext}" step="1" placeholder="${minNext}" />
-               <button class="btn btn--primary btn--small" id="auction-bid-btn">Đấu giá</button>
-               <button class="btn btn--ghost btn--small" id="auction-pass-btn">Rút lui</button>
-             </div>`
-          : `<p class="auction-panel__waiting">Đang chờ ${escapeHtml(bidderName(auction.currentTurnId))} quyết định...</p>`
-      }
-    </div>
-  `;
-  showDecisionPanel(html);
-  if (isMyTurn) {
-    document.getElementById('auction-bid-btn').onclick = () => {
-      const input = document.getElementById('auction-bid-input');
-      onBid(input.value || minNext);
-    };
-    document.getElementById('auction-pass-btn').onclick = onPass;
-  }
-}
-
-/* -------------------------------- Modals --------------------------------- */
-
-export function showBuyModal(tile, onBuy, onSkip) {
-  const modal = document.getElementById('modal-buy');
-  document.getElementById('modal-buy-name').textContent = tile.name;
-  document.getElementById('modal-buy-price').textContent = tile.price;
-  modal.hidden = false;
-  const buyBtn = modal.querySelector('[data-action="buy-property"]');
-  const skipBtn = modal.querySelector('[data-action="skip-property"]');
-  buyBtn.onclick = () => { modal.hidden = true; onBuy(); };
-  skipBtn.onclick = () => { modal.hidden = true; onSkip(); };
-}
-
-export function hideModal(id) {
-  document.getElementById(id).hidden = true;
-}
-
-/* ---------------------------- Quản lý tài sản ---------------------------- */
-
 let manageHandlers = null;
 let manageBoard = null;
 let manageListenerAttached = false;
+let soundEnabled = true;
+let audioCtx = null;
 
-function ensureManageListener() {
-  if (manageListenerAttached) return;
-  manageListenerAttached = true;
-  document.getElementById('manage-body').addEventListener('click', (evt) => {
-    const btn = evt.target.closest('[data-manage]');
-    if (!btn || btn.disabled || !manageHandlers) return;
-    const tileId = Number(btn.dataset.tile);
-    const kind = btn.dataset.manage;
-    if (kind === 'upgrade') manageHandlers.onUpgrade(tileId);
-    else if (kind === 'downgrade') manageHandlers.onDowngrade(tileId);
-    else if (kind === 'mortgage') manageHandlers.onMortgage(tileId);
-    else if (kind === 'unmortgage') manageHandlers.onUnmortgage(tileId);
+export function navigateTo(id){ hideAllModals(); document.querySelectorAll('.screen').forEach(x=>x.classList.remove('screen--active')); document.getElementById(id)?.classList.add('screen--active'); }
+export function hideAllModals(){ document.querySelectorAll('.modal').forEach(x=>x.hidden=true); }
+export function hideModal(id){ const x=document.getElementById(id); if(x)x.hidden=true; }
+export function showToast(text,variant=''){ const root=document.getElementById('toast-root'); if(!root)return; const e=document.createElement('div'); e.className=`toast ${variant?`toast--${variant}`:''}`.trim(); e.textContent=text; root.appendChild(e); setTimeout(()=>e.remove(),3200); }
+export function setReconnectBanner(v){ const e=document.getElementById('reconnect-banner'); if(e)e.hidden=!v; }
+
+// 40 ô nằm trên chu vi lưới 11x11: 11 + 9 + 11 + 9 = 40.
+function tileGridPosition(i){
+  if(i<=10) return {row:11,col:11-i};
+  if(i<=20) return {row:11-(i-10),col:1};
+  if(i<=30) return {row:1,col:i-20+1};
+  return {row:i-30+1,col:11};
+}
+function tileCenterPercent(i){ const p=tileGridPosition(i); return {x:((p.col-.5)/11)*100,y:((p.row-.5)/11)*100}; }
+function escapeHtml(s){return String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
+export function formatMoney(n){const sign=n<0?'-':'';return `${sign}${Math.abs(Math.round(n)).toLocaleString('vi-VN')} ₫`;}
+
+function tileIcon(t){ return t.icon || ({START:'🚩',TAX:'💸',CHANCE:'🎴',EVENT:'✨',BONUS:'🎁',REST:'🅿️',JAIL:'🔒',TELEPORT:'🌀',GO_TO_JAIL:'🚓'}[t.type]||''); }
+export function initBoard(board){
+  const el=document.getElementById('board'); if(!el)return;
+  el.innerHTML=''; Object.keys(tokenEls).forEach(k=>delete tokenEls[k]);
+  el.style.gridTemplateColumns='repeat(11,1fr)'; el.style.gridTemplateRows='repeat(11,1fr)';
+  const center=document.getElementById('board-center'); if(center){center.style.inset='9.1%';center.style.zIndex='4';}
+  board.forEach(tile=>{
+    const p=tileGridPosition(tile.id), d=document.createElement('div');
+    d.className=`tile tile--${tile.type}`; d.dataset.tileId=tile.id; d.style.gridRow=p.row; d.style.gridColumn=p.col;
+    if(tile.type===TILE_TYPES.PROPERTY){const bar=document.createElement('div');bar.className='tile__bar';bar.style.background=GROUP_COLORS[tile.group]||'#888';d.appendChild(bar);}
+    const name=document.createElement('div');name.className='tile__name';name.textContent=tile.type===TILE_TYPES.PROPERTY||tile.type===TILE_TYPES.TAX?tile.name:`${tileIcon(tile)} ${tile.name}`;d.appendChild(name);
+    if(tile.type===TILE_TYPES.PROPERTY){const price=document.createElement('div');price.className='tile__price';price.textContent=formatMoney(tile.price);d.appendChild(price);const lv=document.createElement('div');lv.className='tile__level';lv.dataset.levelFor=tile.id;d.appendChild(lv);const owner=document.createElement('div');owner.className='tile__owner-dot';owner.dataset.ownerFor=tile.id;d.appendChild(owner);}
+    if(tile.type===TILE_TYPES.TAX){const a=document.createElement('div');a.className='tile__price';a.textContent=`-${formatMoney(tile.amount)}`;d.appendChild(a);}
+    el.appendChild(d);
   });
+  const layer=document.createElement('div');layer.className='token-layer';layer.id='token-layer';el.appendChild(layer);
 }
 
-function renderManageBody(player) {
-  const body = document.getElementById('manage-body');
-  if (!player || player.properties.length === 0) {
-    body.innerHTML = '<p class="manage-empty">Bạn chưa sở hữu bất động sản nào.</p>';
-    return;
-  }
-  const owned = manageBoard.filter((t) => player.properties.includes(t.id));
-  body.innerHTML = owned
-    .map((tile) => {
-      const level = tile.level || 0;
-      const mortgaged = !!tile.mortgaged;
-      const groupTiles = manageBoard.filter((t) => t.type === TILE_TYPES.PROPERTY && t.group === tile.group);
-      const ownsGroup = groupTiles.every((t) => player.properties.includes(t.id));
-      const anyMortgagedInGroup = groupTiles.some((t) => t.mortgaged);
-      const canUpgrade = ownsGroup && !mortgaged && !anyMortgagedInGroup && level < MAX_HOUSE_LEVEL - 1 && player.money >= tile.houseCost;
-      const canDowngrade = level > 0;
-      const canMortgage = !mortgaged && level === 0;
-      const canUnmortgage = mortgaged;
-      const mortgageValue = mortgageValueOf(tile);
-      const unmortgageCost = unmortgageCostOf(tile);
-      const statusText = mortgaged ? 'Đã thế chấp' : level > 0 ? `Cấp ${level}` : 'Đất trống';
-      return `
-        <div class="manage-row">
-          <div class="manage-row__info">
-            <strong>${escapeHtml(tile.name)}</strong>
-            <span class="manage-row__meta ${mortgaged ? 'manage-row__meta--mortgaged' : ''}">${statusText}</span>
-          </div>
-          <div class="manage-row__actions">
-            <button class="btn btn--ghost btn--small" data-manage="upgrade" data-tile="${tile.id}" ${canUpgrade ? '' : 'disabled'}>⬆️ Nâng cấp (${tile.houseCost})</button>
-            <button class="btn btn--ghost btn--small" data-manage="downgrade" data-tile="${tile.id}" ${canDowngrade ? '' : 'disabled'}>⬇️ Bán nhà</button>
-            <button class="btn btn--ghost btn--small" data-manage="mortgage" data-tile="${tile.id}" ${canMortgage ? '' : 'disabled'}>🏦 Thế chấp (+${mortgageValue})</button>
-            <button class="btn btn--ghost btn--small" data-manage="unmortgage" data-tile="${tile.id}" ${canUnmortgage ? '' : 'disabled'}>💳 Chuộc lại (-${unmortgageCost})</button>
-          </div>
-        </div>
-      `;
-    })
-    .join('');
+export function renderOwnership(board,players){
+  for(const t of board){if(t.type!==TILE_TYPES.PROPERTY)continue;const owner=players.find(p=>p.properties.includes(t.id));const dot=document.querySelector(`[data-owner-for="${t.id}"]`);if(dot)dot.style.background=owner?.color||'transparent';const lv=document.querySelector(`[data-level-for="${t.id}"]`);if(lv){const s=getPropertyState({propertyStates:arguments.length>2?arguments[2]:undefined},t.id);const realState=window.__ctpState?.propertyStates?.[String(t.id)]||s;const level=realState?.level||0;lv.textContent=level>=5?'🏨':level>0?'🏠'.repeat(Math.min(level,4)):'';}}
 }
 
-export function showManageModal(board, player, handlers) {
-  manageBoard = board;
-  manageHandlers = handlers;
-  ensureManageListener();
-  document.getElementById('modal-manage').hidden = false;
-  renderManageBody(player);
-}
+function getOrCreateToken(p,index){const layer=document.getElementById('token-layer');if(!layer)return null;let e=tokenEls[p.id];if(!e){e=document.createElement('div');e.className='token';e.dataset.playerId=p.id;const img=document.createElement('img');img.alt='';img.draggable=false;img.src=`/assets/tokens/${TOKEN_ASSETS[index%TOKEN_ASSETS.length]}`;e.appendChild(img);layer.appendChild(e);tokenEls[p.id]=e;}return e;}
+export function renderTokens(players){const layer=document.getElementById('token-layer');if(!layer)return;const active=new Set(players.filter(p=>!p.bankrupt).map(p=>p.id));Object.keys(tokenEls).forEach(id=>{if(!active.has(id)){tokenEls[id].remove();delete tokenEls[id];}});const groups={};players.filter(p=>!p.bankrupt).forEach((p,i)=>{(groups[p.position]??=[]).push([p,i]);});Object.entries(groups).forEach(([pos,g])=>g.forEach(([p,i],idx)=>{const e=getOrCreateToken(p,i);const q=tileCenterPercent(Number(pos));const off=(idx-(g.length-1)/2)*12;e.style.left=`calc(${q.x}% + ${off}px - 9px)`;e.style.top=`calc(${q.y}% - 9px)`;}));}
+export function clearTileSignals(){document.querySelectorAll('.tile--incoming,.tile--passed,.tile--landed').forEach(e=>e.classList.remove('tile--incoming','tile--passed','tile--landed'));}
+export function animateTokenMove(playerId,path,{stepMs=170,teleport=false}={}){return new Promise(resolve=>{const e=tokenEls[playerId];if(!e||!path||path.length<2){resolve();return;}let i=1;const step=()=>{const q=tileCenterPercent(path[i]);e.style.left=`calc(${q.x}% - 9px)`;e.style.top=`calc(${q.y}% - 9px)`;const t=document.querySelector(`[data-tile-id="${path[i]}"]`);t?.classList.add(i===path.length-1?'tile--landed':'tile--passed');if(i===path.length-1){setTimeout(resolve,Math.max(80,stepMs));return;}i++;setTimeout(step,stepMs);};if(teleport)e.classList.add('token--teleporting');step();});}
 
-/** Vẽ lại nội dung modal quản lý tài sản nếu đang mở (gọi sau mỗi lần state thay đổi). */
-export function updateManageModal(player) {
-  const modal = document.getElementById('modal-manage');
-  if (!modal || modal.hidden || !manageBoard) return;
-  renderManageBody(player);
-}
+export function renderHUD(state,myId){const h=document.getElementById('player-hud');if(!h)return;h.innerHTML=state.players.map(p=>`<div class="hud__card ${p.id===state.players[state.turnIndex]?.id?'hud__card--active':''} ${p.bankrupt?'hud__card--bankrupt':''}"><div class="hud__name"><span class="hud__dot" style="background:${p.color}"></span>${escapeHtml(p.name)}${p.isAI?' 🤖':''}${p.id===myId?' (Bạn)':''}</div><div class="hud__money">${formatMoney(p.money)}</div><div style="font-size:.72rem;color:var(--text-dim)">${p.properties.length} BĐS${p.inJail?' · 🔒 Tù':''}${p.bankrupt?' · Phá sản':''}</div></div>`).join('');}
+export function renderTicker(players){const e=document.getElementById('money-ticker');if(!e)return;const s=players.map(p=>`<span class="ticker__item ${p.money<0?'negative':''}">${escapeHtml(p.name)}: ${formatMoney(p.money)}</span>`).join('');e.innerHTML=`<div class="ticker__track">${s}${s}</div>`;}
 
-export function showGameOverModal(text) {
-  document.getElementById('gameover-text').textContent = text;
-  document.getElementById('modal-gameover').hidden = false;
-}
+function ctx(){if(!soundEnabled)return null;if(!audioCtx){const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;try{audioCtx=new C();}catch{return null;}}if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});return audioCtx;}
+export function setSoundEnabled(v){soundEnabled=!!v;}
+const pip={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+function setFace(e,n){if(!e)return;e.innerHTML='';for(let i=0;i<9;i++){const s=document.createElement('span');s.className='die__pip';if((pip[n]||[]).includes(i))s.classList.add('die__pip--on');e.appendChild(s);}e.setAttribute('aria-label',n);}
+export function renderDice(dice,{rolling=false}={}){const a=document.getElementById('die-1'),b=document.getElementById('die-2'),wrap=document.getElementById('dice-display');if(!dice){return Promise.resolve();}if(!rolling){setFace(a,dice[0]);setFace(b,dice[1]);return Promise.resolve();}wrap?.classList.add('dice-display--rolling');a?.classList.add('die--rolling');b?.classList.add('die--rolling');return new Promise(resolve=>{const start=performance.now();const frame=now=>{if(now-start<650){setFace(a,1+Math.floor(Math.random()*6));setFace(b,1+Math.floor(Math.random()*6));requestAnimationFrame(frame);}else{setFace(a,dice[0]);setFace(b,dice[1]);wrap?.classList.remove('dice-display--rolling');a?.classList.remove('die--rolling');b?.classList.remove('die--rolling');resolve();}};requestAnimationFrame(frame);});}
+export function setTurnIndicator(t){const e=document.getElementById('turn-indicator');if(e)e.textContent=t;}
+export function setAIThinking(v){const e=document.getElementById('ai-thinking-indicator');if(e)e.hidden=!v;}
+export function setRollButtonVisible(v){const e=document.getElementById('btn-roll');if(e)e.hidden=!v;}
+export function setRollButtonLabel(t){const e=document.getElementById('btn-roll');if(e)e.textContent=t;}
+export function setEndTurnButtonVisible(v){const e=document.getElementById('btn-end-turn');if(e)e.hidden=!v;}
+export function showDecisionPanel(html){const e=document.getElementById('decision-panel');if(e){e.innerHTML=html;e.hidden=false;}}
+export function hideDecisionPanel(){const e=document.getElementById('decision-panel');if(e){e.hidden=true;e.innerHTML='';}}
 
-export function showTradeIncoming(text, onAccept, onDecline) {
-  const modal = document.getElementById('modal-trade-incoming');
-  document.getElementById('trade-incoming-text').textContent = text;
-  modal.hidden = false;
-  modal.querySelector('[data-action="accept-trade"]').onclick = () => { modal.hidden = true; onAccept(); };
-  modal.querySelector('[data-action="decline-trade"]').onclick = () => { modal.hidden = true; onDecline(); };
-}
+export function showJailPanel(player,onPay,onCard){showDecisionPanel(`<div class="jail-panel"><p class="jail-panel__title">🚔 Bạn đang ở Nhà Giam (${player.jailTurns}/3)</p><div class="jail-panel__actions"><button class="btn btn--secondary btn--small" id="jail-pay-bail">💸 Nộp 100.000 ₫</button>${player.jailCards>0?`<button class="btn btn--secondary btn--small" id="jail-use-card">🎫 Dùng thẻ (${player.jailCards})</button>`:''}</div></div>`);document.getElementById('jail-pay-bail')?.addEventListener('click',onPay);document.getElementById('jail-use-card')?.addEventListener('click',onCard);}
+export function showAuctionPanel(state,myId,onBid,onPass){const a=state.auction;if(!a)return;const tile=state.board.find(t=>t.id===a.tileId);const mine=a.currentTurnId===myId;const bidder=state.players.find(p=>p.id===a.highestBidderId)?.name;const min=a.highestBid+Math.max(10000,Math.ceil((tile?.price||0)*.05));showDecisionPanel(`<div class="auction-panel"><p class="auction-panel__title">🔨 Đấu giá: ${escapeHtml(tile?.name||'')}</p><p class="auction-panel__bid">Giá cao nhất: <span class="auction-panel__amount">${a.highestBid?formatMoney(a.highestBid):'chưa có'}</span>${bidder?` — ${escapeHtml(bidder)}`:''}</p>${mine?`<div class="auction-panel__form"><input id="auction-bid-input" type="number" min="${min}" step="10000" value="${min}"><button class="btn btn--primary btn--small" id="auction-bid-btn">Đấu giá</button><button class="btn btn--ghost btn--small" id="auction-pass-btn">Rút lui</button></div>`:`<p class="auction-panel__waiting">Đang chờ ${escapeHtml(state.players.find(p=>p.id===a.currentTurnId)?.name||'người chơi')}...</p>`}</div>`);if(mine){document.getElementById('auction-bid-btn').onclick=()=>onBid(document.getElementById('auction-bid-input').value);document.getElementById('auction-pass-btn').onclick=onPass;}}
 
-/* -------------------------------- Chat ---------------------------------- */
+export function showBuyModal(tile,onBuy,onSkip){const m=document.getElementById('modal-buy');if(!m)return;document.getElementById('modal-buy-name').textContent=tile.name;document.getElementById('modal-buy-price').textContent=formatMoney(tile.price);m.hidden=false;m.querySelector('[data-action="buy-property"]').onclick=()=>{m.hidden=true;onBuy();};m.querySelector('[data-action="skip-property"]').onclick=()=>{m.hidden=true;onSkip();};}
 
-export function toggleChatPanel(force) {
-  const panel = document.getElementById('chat-panel');
-  const open = force === undefined ? !panel.classList.contains('chat-panel--open') : force;
-  panel.classList.toggle('chat-panel--open', open);
-}
+function ensureManageListener(){if(manageListenerAttached)return;manageListenerAttached=true;document.getElementById('manage-body')?.addEventListener('click',e=>{const b=e.target.closest('[data-manage]');if(!b||b.disabled||!manageHandlers)return;const id=Number(b.dataset.tile);const k=b.dataset.manage;if(k==='upgrade')manageHandlers.onUpgrade(id);else if(k==='downgrade')manageHandlers.onDowngrade(id);else if(k==='mortgage')manageHandlers.onMortgage(id);else manageHandlers.onUnmortgage(id);});}
+function renderManageBody(player){const body=document.getElementById('manage-body');if(!body)return;if(!player||!player.properties.length){body.innerHTML='<p class="manage-empty">Bạn chưa sở hữu bất động sản nào.</p>';return;}body.innerHTML=manageBoard.filter(t=>player.properties.includes(t.id)).map(t=>{const s=window.__ctpState?.propertyStates?.[String(t.id)]||{level:0,mortgaged:false};const level=s.level||0,mortgaged=!!s.mortgaged;const group=manageBoard.filter(x=>x.type===TILE_TYPES.PROPERTY&&x.group===t.group);const owns=group.every(x=>player.properties.includes(x.id));const blocked=group.some(x=>window.__ctpState?.propertyStates?.[String(x.id)]?.mortgaged);const canUp=t.group!=='STATION'&&owns&&!blocked&&!mortgaged&&level<4&&player.money>=t.upgradeCost;const canDown=level>0;const canMort=!mortgaged&&level===0;const canUn=mortgaged;return `<div class="manage-row"><div class="manage-row__info"><strong>${escapeHtml(t.name)}</strong><span class="manage-row__meta ${mortgaged?'manage-row__meta--mortgaged':''}">${mortgaged?'Đã thế chấp':level?'Cấp '+level:'Đất trống'}</span></div><div class="manage-row__actions"><button class="btn btn--ghost btn--small" data-manage="upgrade" data-tile="${t.id}" ${canUp?'':'disabled'}>⬆️ Nâng cấp (${formatMoney(t.upgradeCost)})</button><button class="btn btn--ghost btn--small" data-manage="downgrade" data-tile="${t.id}" ${canDown?'':'disabled'}>⬇️ Bán nhà</button><button class="btn btn--ghost btn--small" data-manage="mortgage" data-tile="${t.id}" ${canMort?'':'disabled'}>🏦 Thế chấp (+${formatMoney(mortgageValueOf(t))})</button><button class="btn btn--ghost btn--small" data-manage="unmortgage" data-tile="${t.id}" ${canUn?'':'disabled'}>💳 Chuộc (-${formatMoney(unmortgageCostOf(t))})</button></div></div>`;}).join('');}
+export function showManageModal(board,player,handlers){manageBoard=board;manageHandlers=handlers;ensureManageListener();document.getElementById('modal-manage').hidden=false;renderManageBody(player);}
+export function updateManageModal(player){const m=document.getElementById('modal-manage');if(m&&!m.hidden&&manageBoard)renderManageBody(player);}
+export function showGameOverModal(text){const m=document.getElementById('modal-gameover');if(m){document.getElementById('gameover-text').textContent=text;m.hidden=false;}}
+export function showTradeIncoming(text,onAccept,onDecline){const m=document.getElementById('modal-trade-incoming');if(!m)return;document.getElementById('trade-incoming-text').textContent=text;m.hidden=false;m.querySelector('[data-action="accept-trade"]').onclick=()=>{m.hidden=true;onAccept();};m.querySelector('[data-action="decline-trade"]').onclick=()=>{m.hidden=true;onDecline();};}
 
-export function addChatLine(name, text) {
-  const log = document.getElementById('chat-log');
-  const line = document.createElement('div');
-  line.className = 'chat-line';
-  line.innerHTML = `<strong>${escapeHtml(name)}:</strong> ${escapeHtml(text)}`;
-  log.appendChild(line);
-  log.scrollTop = log.scrollHeight;
-}
+export function toggleChatPanel(force){const p=document.getElementById('chat-panel');if(!p)return;const open=force===undefined?!p.classList.contains('chat-panel--open'):force;p.classList.toggle('chat-panel--open',open);}
+export function addChatLine(name,text){const l=document.getElementById('chat-log');if(!l)return;const e=document.createElement('div');e.className='chat-line';e.innerHTML=`<strong>${escapeHtml(name)}:</strong> ${escapeHtml(text)}`;l.appendChild(e);l.scrollTop=l.scrollHeight;}
+export function addGameLog(text){const l=document.getElementById('game-log');if(!l)return;const e=document.createElement('div');e.textContent='· '+text;l.appendChild(e);l.scrollTop=l.scrollHeight;while(l.children.length>60)l.firstChild.remove();}
 
-export function addGameLog(text) {
-  const log = document.getElementById('game-log');
-  const line = document.createElement('div');
-  line.textContent = `· ${text}`;
-  log.appendChild(line);
-  log.scrollTop = log.scrollHeight;
-  while (log.children.length > 60) log.removeChild(log.firstChild);
-}
-
-/* -------------------------------- Lobby ---------------------------------- */
-
-export function renderLobby(state, myPlayerId, roomId) {
-  document.getElementById('lobby-room-code').textContent = roomId;
-  const list = document.getElementById('lobby-players');
-  list.innerHTML = '';
-  state.players.forEach((p) => {
-    const li = document.createElement('li');
-    li.className = 'lobby__player';
-    li.innerHTML = `
-      <span class="lobby__player-dot" style="background:${p.color}"></span>
-      <span class="lobby__player-name">${escapeHtml(p.name)}${p.id === myPlayerId ? ' (Bạn)' : ''}${p.isAI ? ' 🤖' : ''}</span>
-      <span class="lobby__player-tag">${p.ready || p.isAI ? '✅ Sẵn sàng' : 'Đang chờ'}</span>
-    `;
-    list.appendChild(li);
-  });
-  document.getElementById('lobby-count').textContent = `${state.players.length}/4 người chơi`;
-  const isHost = state.players[0]?.id === myPlayerId;
-  document.getElementById('lobby-start-btn').hidden = !isHost;
-}
+export function renderLobby(state,myId,roomId){document.getElementById('lobby-room-code').textContent=roomId;const list=document.getElementById('lobby-players');list.innerHTML=state.players.map(p=>`<li class="lobby__player"><span class="lobby__player-dot" style="background:${p.color}"></span><span class="lobby__player-name">${escapeHtml(p.name)}${p.id===myId?' (Bạn)':''}${p.isAI?' 🤖':''}</span><span class="lobby__player-tag">${p.ready||p.isAI?'✅ Sẵn sàng':'Đang chờ'}</span></li>`).join('');document.getElementById('lobby-count').textContent=`${state.players.length}/6 người chơi`;document.getElementById('lobby-start-btn').hidden=state.players[0]?.id!==myId;}
