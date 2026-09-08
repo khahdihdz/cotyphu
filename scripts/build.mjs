@@ -12,6 +12,7 @@ const checks = [
   ['40 ô bàn cờ', board.length === 40],
   ['8 nhân vật', characters.length === 8],
   ['30 thẻ sự kiện', events.length === 30],
+  ['30 thẻ sự kiện authoritative source', await access(resolve(root, 'src/cards.js')).then(() => true).catch(() => false)],
   ['12 token', manifest.tokens.length === 12],
   ['5 cấp công trình', manifest.buildings.length === 5],
   ['8 nhóm asset bàn cờ', manifest.board.length === 8],
