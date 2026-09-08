@@ -6,6 +6,7 @@
   "buildings":["buildings/house-level-1.svg","buildings/house-level-2.svg","buildings/house-level-3.svg","buildings/house-level-4.svg","buildings/hotel.svg"],
   "cards":["cards/card-illustrations.svg","cards/card-illustrations-19-30.svg"],
   "effects":["effects/effects.svg"],
+  "ui":["ui/ui.svg"],
   "cardCount":30,
   "generated":true,
   "externalAssets":false
