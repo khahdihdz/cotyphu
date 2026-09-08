@@ -1,0 +1,10 @@
+[
+{"id":"minh","name":"Anh Minh","color":"#f2b84b","avatar":"characters/anh-minh.svg","token":"tokens/xe-hoi.svg"},
+{"id":"lan","name":"Chị Lan","color":"#3fc1c9","avatar":"characters/chi-lan.svg","token":"tokens/vuong-mien.svg"},
+{"id":"boss","name":"Ông Chủ","color":"#e85a4f","avatar":"characters/ong-chu.svg","token":"tokens/kim-cuong.svg"},
+{"id":"investor","name":"Nhà Đầu Tư","color":"#9b8cf2","avatar":"characters/nha-dau-tu.svg","token":"tokens/ten-lua.svg"},
+{"id":"entrepreneur","name":"Doanh Nhân","color":"#ef8b4f","avatar":"characters/doanh-nhan.svg","token":"tokens/tau-hoa.svg"},
+{"id":"explorer","name":"Nhà Thám Hiểm","color":"#43a047","avatar":"characters/nha-tham-hiem.svg","token":"tokens/may-bay.svg"},
+{"id":"engineer","name":"Kỹ Sư","color":"#4c8bf5","avatar":"characters/ky-su.svg","token":"tokens/robot.svg"},
+{"id":"streamer","name":"Streamer","color":"#e05bc8","avatar":"characters/streamer.svg","token":"tokens/ngoi-sao.svg"}
+]
