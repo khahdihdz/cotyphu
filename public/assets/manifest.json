@@ -1,13 +1,75 @@
 {
-  "artDirection":"2D vector cartoon premium, original, non-branded",
-  "board":["board/board-background.svg","board/board-frame.svg","board/board-center.svg","board/tile-property.svg","board/tile-event.svg","board/tile-tax.svg","board/tile-jail.svg","board/tile-start.svg"],
-  "characters":["characters/anh-minh.svg","characters/chi-lan.svg","characters/ong-chu.svg","characters/nha-dau-tu.svg","characters/doanh-nhan.svg","characters/nha-tham-hiem.svg","characters/ky-su.svg","characters/streamer.svg"],
-  "tokens":["tokens/xe-hoi.svg","tokens/may-bay.svg","tokens/tau-hoa.svg","tokens/chia-khoa.svg","tokens/vuong-mien.svg","tokens/ten-lua.svg","tokens/robot.svg","tokens/ngoi-sao.svg","tokens/kim-cuong.svg","tokens/ruong-bau.svg","tokens/meo.svg","tokens/cho.svg"],
-  "buildings":["buildings/house-level-1.svg","buildings/house-level-2.svg","buildings/house-level-3.svg","buildings/house-level-4.svg","buildings/hotel.svg"],
-  "cards":["cards/card-illustrations.svg","cards/card-illustrations-19-30.svg"],
-  "effects":["effects/effects.svg"],
-  "ui":["ui/ui.svg"],
-  "cardCount":30,
-  "generated":true,
-  "externalAssets":false
+  "artDirection": "Original family-friendly pastel toy-board art; existing production assets are SVG/vector 2D with tactile 3D-inspired CSS presentation. Do not label SVGs as true 3D models.",
+  "board": [
+    "board/board-background.svg",
+    "board/board-frame.svg",
+    "board/board-center.svg",
+    "board/tile-property.svg",
+    "board/tile-event.svg",
+    "board/tile-tax.svg",
+    "board/tile-jail.svg",
+    "board/tile-start.svg"
+  ],
+  "characters": [
+    "characters/anh-minh.svg",
+    "characters/chi-lan.svg",
+    "characters/ong-chu.svg",
+    "characters/nha-dau-tu.svg",
+    "characters/doanh-nhan.svg",
+    "characters/nha-tham-hiem.svg",
+    "characters/ky-su.svg",
+    "characters/streamer.svg"
+  ],
+  "tokens": [
+    "tokens/xe-hoi.svg",
+    "tokens/may-bay.svg",
+    "tokens/tau-hoa.svg",
+    "tokens/chia-khoa.svg",
+    "tokens/vuong-mien.svg",
+    "tokens/ten-lua.svg",
+    "tokens/robot.svg",
+    "tokens/ngoi-sao.svg",
+    "tokens/kim-cuong.svg",
+    "tokens/ruong-bau.svg",
+    "tokens/meo.svg",
+    "tokens/cho.svg"
+  ],
+  "buildings": [
+    "buildings/house-level-1.svg",
+    "buildings/house-level-2.svg",
+    "buildings/house-level-3.svg",
+    "buildings/house-level-4.svg",
+    "buildings/hotel.svg"
+  ],
+  "cards": [
+    "cards/card-illustrations.svg",
+    "cards/card-illustrations-19-30.svg"
+  ],
+  "effects": [
+    "effects/effects.svg"
+  ],
+  "ui": [
+    "ui/ui.svg"
+  ],
+  "cardCount": 30,
+  "generated": true,
+  "externalAssets": false,
+  "pwaIcons": [
+    "icons/icon-192.svg",
+    "icons/icon-512.svg"
+  ],
+  "visualRefresh": {
+    "theme": "pastel toy board",
+    "palette": [
+      "#f1f7ff",
+      "#ffffff",
+      "#4f8df7",
+      "#ffbd45",
+      "#20b8a6",
+      "#f47772",
+      "#8b7cf6"
+    ],
+    "audience": "all ages",
+    "true3DModels": "not yet included; see docs/ASSET_3D_PWA.md"
+  }
 }
