@@ -1,0 +1,31 @@
+{
+  "id": "/",
+  "name": "Cờ Tỷ Phú Online",
+  "short_name": "Cờ Tỷ Phú",
+  "description": "Cùng bạn bè mua đất, xây nhà và khám phá những bất ngờ trên bàn cờ.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f3f8ff",
+  "theme_color": "#4f8df7",
+  "categories": [
+    "games",
+    "family"
+  ],
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
