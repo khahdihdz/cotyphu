@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#171326" />
+<meta name="theme-color" content="#4f8df7" />
+<meta name="color-scheme" content="light" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="icon" href="./assets/icons/icon-192.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="./assets/icons/icon-192.svg" />
 <title>Cờ Tỷ Phú Online</title>
 <meta name="description" content="Webgame Cờ Tỷ Phú online nhiều người chơi, có AI, chạy trên Cloudflare Workers." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -266,5 +270,10 @@
 
 <!-- game.js là module gốc duy nhất; nó tự import ui.js / websocket.js / gameLogic.js / ai.js / protocol.js -->
 <script type="module" src="game.js"></script>
+<script>
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch((error) => console.warn("PWA offline cache unavailable:", error)));
+}
+</script>
 </body>
 </html>
