@@ -494,3 +494,173 @@ input, select { font-family: inherit; }
 .trade-col select, .trade-col input { min-height: 40px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--bg-alt); color: var(--text); padding: 0 10px; width: 100%; }
 
 /* Touch targets minimum 44x44 kept throughout via .btn / .icon-btn min-height */
+
+
+/* =========================================================================
+   FAMILY FRIENDLY REFRESH — pastel toy-board / tactile 3D-inspired surfaces.
+   Keeps the existing DOM and game engine intact; no third-party assets.
+   ========================================================================= */
+:root {
+  color-scheme: light;
+  --bg: #f1f7ff;
+  --bg-alt: #e6f1ff;
+  --panel: #ffffff;
+  --panel-2: #f3f7ff;
+  --line: #d8e5f7;
+  --gold: #ffbd45;
+  --gold-dim: #f59e0b;
+  --teal: #20b8a6;
+  --coral: #f47772;
+  --violet: #8b7cf6;
+  --text: #263653;
+  --text-dim: #64748b;
+  --radius-lg: 24px;
+  --radius-md: 17px;
+  --radius-sm: 11px;
+}
+body {
+  background:
+    radial-gradient(circle at 8% 8%, rgba(255, 209, 102, .24), transparent 24rem),
+    radial-gradient(circle at 92% 18%, rgba(116, 190, 255, .22), transparent 27rem),
+    var(--bg);
+  color: var(--text);
+}
+.topbar {
+  background: rgba(255,255,255,.92);
+  border-bottom-color: var(--line);
+  box-shadow: 0 4px 18px rgba(64, 103, 160, .07);
+  backdrop-filter: blur(12px);
+}
+.icon-btn {
+  background: #fff;
+  color: var(--text);
+  border-color: var(--line);
+  box-shadow: 0 3px 0 #d9e5f5;
+}
+.btn {
+  box-shadow: 0 4px 0 rgba(55, 83, 125, .12);
+}
+.btn--primary {
+  background: linear-gradient(180deg, #ffd36d, #ffb938);
+  color: #51360b;
+  box-shadow: 0 5px 0 #e7a02b, 0 9px 18px rgba(245, 158, 11, .16);
+}
+.btn--secondary {
+  background: #e8f2ff;
+  border: 1px solid #c8defb;
+  color: #28518b;
+  box-shadow: 0 4px 0 #d0e2fa;
+}
+.btn--ghost {
+  background: rgba(255,255,255,.78);
+  color: #536782;
+  border-color: #d8e5f7;
+}
+.home { gap: 16px; }
+.home__glow {
+  width: min(120vw, 760px);
+  height: min(120vw, 760px);
+  background: radial-gradient(circle, rgba(93, 165, 255, .2), transparent 68%);
+}
+.home__logo {
+  color: #3979df;
+  background: none;
+  -webkit-text-fill-color: #3979df;
+  text-shadow: 0 3px 0 #c7ddff;
+  letter-spacing: .01em;
+}
+.home__logo-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.2em;
+  height: 1.2em;
+  border-radius: 24%;
+  background: #fff;
+  box-shadow: 0 5px 0 #d5e5fb, 0 10px 20px rgba(54, 103, 177, .13);
+}
+.home__tagline { color: #58708f; }
+.home__footer { color: #7587a0; }
+.field span, .guide p { color: #61748e; }
+.field input, .field select, .trade-col select, .trade-col input {
+  background: #fff;
+  color: var(--text);
+  border-color: #d5e2f3;
+  box-shadow: inset 0 1px 2px rgba(38, 54, 83, .04);
+}
+.panel-list, .lobby { color: var(--text); }
+.lobby__player, .hud__card, .manage-row {
+  background: #fff;
+  border-color: #dce8f8;
+  box-shadow: 0 5px 0 rgba(172, 197, 229, .24), 0 10px 24px rgba(52, 91, 145, .05);
+}
+.lobby__player-tag, .lobby__count { color: #6b7f99; }
+.board-wrap {
+  filter: drop-shadow(0 12px 0 rgba(87, 128, 184, .12));
+}
+.board {
+  background: #dbeaff;
+  border: 4px solid #fff;
+  box-shadow: 0 0 0 2px #c7dcf8, 0 8px 0 #c6daf5, 0 16px 28px rgba(53, 91, 145, .12);
+}
+.tile {
+  background: #fff;
+  color: #536782;
+  border-color: #e0eafa;
+}
+.tile:nth-child(odd) { background: #f7faff; }
+.tile__price { color: #2766c3; }
+.tile__bar { box-shadow: 0 2px 0 rgba(39, 73, 124, .12); }
+.tile--corner { background: #fff3cf; color: #79521a; }
+.tile--TAX { background: #fff0ef; }
+.tile--EVENT, .tile--CHANCE { background: #f2efff; }
+.tile--incoming { z-index: 2; }
+.token {
+  border: 2px solid rgba(255,255,255,.95);
+  box-shadow: 0 3px 0 rgba(38, 54, 83, .18), 0 5px 8px rgba(38, 54, 83, .18);
+}
+.board-center {
+  background: rgba(255,255,255,.96);
+  border: 2px solid #d9e7fb;
+  box-shadow: 0 5px 0 rgba(166, 194, 231, .35);
+  color: var(--text);
+}
+.board-center__turn { color: #5c718d; }
+.board-center__ai { color: #128b7f; }
+.die {
+  border: 1px solid #e0e7f1;
+  background: linear-gradient(145deg, #fff, #f3f7ff);
+  box-shadow: 0 4px 0 #d5deeb, 0 7px 12px rgba(38,54,83,.12);
+}
+.die__pip--on { background: #36506f; }
+.hud__card--active {
+  border-color: #f4b740;
+  box-shadow: 0 0 0 2px rgba(244,183,64,.24), 0 5px 0 rgba(172,197,229,.24);
+}
+.hud__money, .modal__price, .ticker { color: #b8790c; }
+.chat-panel, .modal__card {
+  background: #fff;
+  border-color: #d8e5f7;
+  color: var(--text);
+  box-shadow: 0 14px 42px rgba(38, 54, 83, .18);
+}
+.chat-panel__header, .chat-panel__form { border-color: var(--line); }
+.chat-panel__log, .chat-panel__gamelog { color: #536782; }
+.chat-panel__form input {
+  background: #f7faff;
+  color: var(--text);
+  border-color: #d5e2f3;
+}
+.toast {
+  background: #fff;
+  color: var(--text);
+  border-color: #d8e5f7;
+  box-shadow: 0 8px 24px rgba(38,54,83,.16);
+}
+.reconnect-banner { background: #ffcf72; color: #69420b; }
+@media (min-width: 760px) {
+  .home__menu { max-width: 380px; }
+  .board-wrap { width: min(92vw, 760px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home__glow, .ticker__track, .tile--incoming { animation: none !important; }
+}
