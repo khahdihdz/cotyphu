@@ -56,13 +56,40 @@ if (!wrap || !boardEl || !('WebGLRenderingContext' in window)) {
       if (id <= 30) return { x: -edge + (id - 20) * (edge * 2 / 10), z: -edge, rot: 0 };
       return { x: edge, z: -edge + (id - 30) * (edge * 2 / 10), rot: Math.PI / 2 };
     }
-    function labelTexture(text, fill = '#34445c') {
-      const c = document.createElement('canvas'); c.width = 256; c.height = 96;
-      const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height);
-      ctx.fillStyle = fill; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const clean = String(text).length > 17 ? String(text).slice(0,16) + '…' : String(text);
-      ctx.fillText(clean,128,48);
-      const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+    const moneyLabel = value => {
+      if (!Number.isFinite(Number(value))) return '';
+      const n = Number(value);
+      return n >= 1_000_000 ? (n / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' tr' :
+        n >= 1_000 ? Math.round(n / 1_000).toLocaleString('vi-VN') + 'k' : String(n);
+    };
+    function labelTexture(tile) {
+      const c = document.createElement('canvas'); c.width = 512; c.height = 320;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fffdf5'; ctx.fillRect(8, 8, 496, 304);
+      ctx.strokeStyle = '#d6dce5'; ctx.lineWidth = 8; ctx.strokeRect(10, 10, 492, 300);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const words = String(tile.name || '').split(/\\s+/);
+      const lines = []; let line = '';
+      for (const word of words) {
+        const next = line ? line + ' ' + word : word;
+        if (next.length > 13 && line) { lines.push(line); line = word; } else line = next;
+      }
+      if (line) lines.push(line);
+      const shown = lines.slice(0, 2);
+      if (lines.length > 2) shown[1] = shown[1].slice(0, 10) + '…';
+      ctx.fillStyle = '#172033'; ctx.font = 'bold 43px system-ui, sans-serif';
+      const startY = shown.length > 1 ? 88 : 112;
+      shown.forEach((part, i) => ctx.fillText(part, 256, startY + i * 50, 460));
+      const value = tile.type === 'PROPERTY' ? moneyLabel(tile.price) + ' đ' :
+        Number.isFinite(Number(tile.amount)) ? moneyLabel(tile.amount) + ' đ' : '';
+      if (value) {
+        ctx.fillStyle = '#075985'; ctx.font = 'bold 35px system-ui, sans-serif';
+        ctx.fillText(value, 256, 244, 460);
+      } else {
+        ctx.fillStyle = '#475569'; ctx.font = 'bold 27px system-ui, sans-serif';
+        ctx.fillText(String(tile.type || '').replaceAll('_', ' '), 256, 250, 460);
+      }
+      const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; return tex;
     }
     BOARD.forEach((tile, id) => {
       const p = tilePosition(id);
@@ -74,9 +101,9 @@ if (!wrap || !boardEl || !('WebGLRenderingContext' in window)) {
         const strip = new THREE.Mesh(new THREE.BoxGeometry(.84,.035,.19), mat(palette['ABCDEFGH'.indexOf(tile.group)] || '#a5e9f2'));
         strip.position.set(0,.12,-.28); group.add(strip);
       }
-      const spriteMat = new THREE.MeshBasicMaterial({ map: labelTexture(tile.name), transparent:true, side:THREE.DoubleSide, depthWrite:false });
-      const sprite = new THREE.Mesh(new THREE.PlaneGeometry(.86,.32), spriteMat);
-      sprite.rotation.x = -Math.PI/2; sprite.position.set(0,.125,.12); group.add(sprite);
+      const spriteMat = new THREE.MeshBasicMaterial({ map: labelTexture(tile), transparent:true, side:THREE.DoubleSide, depthWrite:false });
+      const sprite = new THREE.Mesh(new THREE.PlaneGeometry(.94,.58), spriteMat);
+      sprite.rotation.x = -Math.PI/2; sprite.position.set(0,.126,.12); group.add(sprite);
       island.add(group); tileMeshes[id] = { group, box, baseMaterial: box.material };
     });
 
