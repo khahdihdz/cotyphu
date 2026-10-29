@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'co-ty-phu-shell-';
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const APP_SHELL = [
   './',
@@ -9,8 +9,18 @@ const APP_SHELL = [
   './ui.js',
   './gameLogic.js',
   './ai.js',
+  './cards.js',
   './protocol.js',
   './websocket.js',
+  './game/gameAdapter.js',
+  './game/phaserGame.js',
+  './game/scenes/bootScene.js',
+  './game/scenes/boardScene.js',
+  './game/render/boardLayout.js',
+  './game/render/boardRenderer.js',
+  './game/render/propertyRenderer.js',
+  './game/render/pawnRenderer.js',
+  './vendor/phaser.esm.min.js',
   './manifest.webmanifest',
   './assets/icons/icon-192.svg',
   './assets/icons/icon-512.svg'

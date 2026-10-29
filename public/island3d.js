@@ -1,11 +1,33 @@
 // 3D island board view — visual layer only; game rules/network remain in game.js + Durable Objects.
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+// Hiển thị CHỈ khi người dùng chọn "Đảo 3D" trong Cài Đặt (setting-renderer === '3d').
+// Chế độ mặc định giờ là bàn cờ Phaser 2D (game/gameAdapter.js) hoặc bảng DOM.
+// Three.js chỉ được tải (từ CDN, như trước) khi thật sự chọn 3D.
+const wants3d = (() => {
+  try {
+    const settings = JSON.parse(localStorage.getItem('ctp_settings_v1') || '{}');
+    return settings.renderer === '3d';
+  } catch (_err) {
+    return false;
+  }
+})();
+
+let THREE = null;
+if (wants3d) {
+  try {
+    THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js');
+  } catch (_err) {
+    console.warn('Không tải được Three.js cho chế độ 3D; dùng bàn cờ fallback.', _err);
+  }
+}
 import { BOARD } from './gameLogic.js';
 
 const wrap = document.querySelector('.board-wrap');
 const boardEl = document.getElementById('board');
-if (!wrap || !boardEl || !('WebGLRenderingContext' in window)) {
-  document.documentElement.classList.add('ctp-3d-fallback');
+if (!THREE || !wrap || !boardEl || !('WebGLRenderingContext' in window)) {
+  if (wants3d) {
+    // Người dùng đã chọn 3D nhưng trình duyệt/mạng không đủ điều kiện.
+    document.documentElement.classList.add('ctp-3d-fallback');
+  }
 } else {
   try {
     const canvas = document.createElement('canvas');
