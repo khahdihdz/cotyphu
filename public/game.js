@@ -7,8 +7,6 @@ import * as AI from './ai.js';
 import { C2S, S2C } from './protocol.js';
 import { RoomConnection } from './websocket.js';
 import * as UI from './ui.js';
-// Lớp hiển thị bàn cờ qua adapter: chọn Phaser 2D hoạt hình / DOM / 3D.
-import * as BoardView from './game/gameAdapter.js';
 
 const LS_KEYS = { settings: 'ctp_settings_v1', save: 'ctp_offline_save_v1' };
 
@@ -25,9 +23,9 @@ const App = {
 
 function loadSettings() {
   try {
-    return JSON.parse(localStorage.getItem(LS_KEYS.settings)) || { sound: true, lang: 'vi', renderer: 'phaser' };
+    return JSON.parse(localStorage.getItem(LS_KEYS.settings)) || { sound: true, lang: 'vi' };
   } catch (_err) {
-    return { sound: true, lang: 'vi', renderer: 'phaser' };
+    return { sound: true, lang: 'vi' };
   }
 }
 function saveSettings() {
@@ -80,26 +78,8 @@ document.getElementById('setting-lang').addEventListener('change', (e) => {
   App.settings.lang = e.target.value;
   saveSettings();
 });
-const RENDERER_LABELS = {
-  phaser: 'Bàn cờ 2D hoạt hình (Phaser)',
-  '3d': 'Đảo 3D',
-  dom: 'Bàn cờ đơn giản (DOM)',
-};
-document.getElementById('setting-renderer').addEventListener('change', async (e) => {
-  App.settings.renderer = e.target.value;
-  saveSettings();
-  if (App.state && App.state.phase === 'PLAYING') {
-    const applied = await BoardView.reinitView();
-    if (applied === '3d-requires-reload') {
-      UI.showToast('Đảo 3D áp dụng khi bạn tải lại trang.', '');
-    } else {
-      UI.showToast(`Đã đổi sang: ${RENDERER_LABELS[applied] || applied}`, '');
-    }
-  }
-});
 document.getElementById('setting-sound').checked = App.settings.sound;
 document.getElementById('setting-lang').value = App.settings.lang;
-document.getElementById('setting-renderer').value = App.settings.renderer || 'phaser';
 UI.setSoundEnabled(App.settings.sound);
 
 document.getElementById('chat-form').addEventListener('submit', (e) => {
@@ -597,14 +577,14 @@ function promptIncomingTrade(offer) {
 
 function enterBoardScreen() {
   UI.navigateTo('screen-board');
-  BoardView.initBoard(Game.BOARD);
+  UI.initBoard(Game.BOARD);
   renderAll();
 }
 
 function renderAll() {
   if (!App.state) return;
-  BoardView.renderOwnership(Game.BOARD, App.state.players, App.state);
-  BoardView.renderTokens(App.state.players);
+  UI.renderOwnership(Game.BOARD, App.state.players);
+  UI.renderTokens(App.state.players);
   UI.renderHUD(App.state, App.myPlayerId);
   UI.renderTicker(App.state.players);
 
@@ -668,32 +648,19 @@ async function applyEvents(events) {
         break;
       case 'PLAYER_MOVED': {
         UI.addGameLog(`${playerName(evt.playerId)} di chuyển tới ${Game.BOARD[evt.to]?.name}.`);
-        // Path chính thức do engine đưa trong event (không gồm ô xuất phát) —
-        // thêm `evt.from` vào đầu để quy ước `path[0]` = vị trí hiện tại như DOM.
-        const path = Array.isArray(evt.path) && evt.path.length
-          ? [evt.from, ...evt.path]
-          : buildMovePath(evt.from, evt.to, evt.steps);
-        const teleport = !!evt.teleport || evt.reason === 'TELEPORT';
-        BoardView.clearTileSignals();
-        await BoardView.animateTokenMove(evt.playerId, path, { teleport });
-        BoardView.flashTile(evt.to, 'landed');
+        const path = evt.teleport ? [evt.from, evt.to] : buildMovePath(evt.from, evt.to, evt.steps);
+        await UI.animateTokenMove(evt.playerId, path, { teleport: !!evt.teleport });
         break;
       }
       case 'MONEY_CHANGED':
         if (evt.delta) UI.showToast(`${playerName(evt.playerId)} ${evt.delta > 0 ? '+' : ''}${evt.delta} 💰`, evt.delta > 0 ? 'money-up' : 'error');
         break;
-      case 'PROPERTY_BOUGHT':
-      case 'PROPERTY_PURCHASED': // alias tên sự kiện cũ, để an toàn tương thích
+      case 'PROPERTY_PURCHASED':
         UI.addGameLog(`🏠 ${playerName(evt.playerId)} đã mua ${Game.BOARD.find((t) => t.id === evt.tileId)?.name}.`);
         break;
-      case 'TRANSFER':
+      case 'RENT_PAID':
+        UI.addGameLog(`💰 ${playerName(evt.from)} trả ${evt.amount} tiền thuê cho ${playerName(evt.to)}.`);
         break;
-      case 'RENT_PAID': {
-        const fromId = evt.fromId ?? evt.from;
-        const toId = evt.toId ?? evt.to;
-        UI.addGameLog(`💰 ${playerName(fromId)} trả ${evt.amount} tiền thuê cho ${playerName(toId)}.`);
-        break;
-      }
       case 'PROPERTY_UPGRADED':
         UI.addGameLog(`⬆️ ${playerName(evt.playerId)} nâng cấp ${Game.BOARD.find((t) => t.id === evt.tileId)?.name} lên cấp ${evt.level}.`);
         break;
@@ -722,12 +689,10 @@ async function applyEvents(events) {
       case 'AUCTION_STARTED':
         UI.addGameLog(`🔨 Đấu giá ${Game.BOARD.find((t) => t.id === evt.tileId)?.name} bắt đầu.`);
         break;
-      case 'AUCTION_BID':
-      case 'AUCTION_BID_PLACED': // alias tên cũ
+      case 'AUCTION_BID_PLACED':
         UI.addGameLog(`🔨 ${playerName(evt.playerId)} đấu giá ${evt.amount}.`);
         break;
-      case 'AUCTION_PASS':
-      case 'AUCTION_PLAYER_PASSED': // alias tên cũ
+      case 'AUCTION_PLAYER_PASSED':
         UI.addGameLog(`🔨 ${playerName(evt.playerId)} rút khỏi đấu giá.`);
         break;
       case 'AUCTION_ENDED':
@@ -738,37 +703,15 @@ async function applyEvents(events) {
           UI.addGameLog(`🔨 Không ai đấu giá ${Game.BOARD.find((t) => t.id === evt.tileId)?.name}.`);
         }
         break;
-      case 'CARD_DRAWN': {
-        // Thẻ Cơ Hội / Sự Kiện rút từ bộ bài thật (src/cards.js).
-        const card = evt.card || {};
-        UI.showToast(`${card.icon || '🃏'} ${card.title || 'Thẻ bài'}: ${card.description || ''}`);
-        UI.addGameLog(`🃏 ${playerName(evt.playerId)} rút thẻ "${card.title || 'Thẻ bài'}": ${card.description || ''}.`);
-        break;
-      }
-      case 'EVENT_TRIGGERED': // alias event thẻ cũ (bản public cũ)
+      case 'EVENT_TRIGGERED':
         UI.showToast(`${playerName(evt.playerId)}: ${evt.text}`);
         UI.addGameLog(`🃏 ${evt.text}`);
         break;
-      case 'PLAYER_BANKRUPT':
-      case 'BANKRUPT': // alias tên cũ
+      case 'BANKRUPT':
         UI.showToast(`💥 ${playerName(evt.playerId)} đã phá sản!`, 'error');
         break;
-      case 'TRADE_ACCEPTED':
-        UI.addGameLog(`🤝 Giao dịch của ${playerName(evt.offer?.fromId || evt.fromId)} đã được chấp nhận.`);
-        break;
-      case 'TRADE_REJECTED':
-        UI.addGameLog(`❌ Đề nghị giao dịch bị từ chối.`);
-        break;
-      case 'TRADE_RESOLVED': {
-        // Alias gói kết quả cũ: đổi tên field khi thiếu dữ liệu mới
+      case 'TRADE_RESOLVED':
         UI.addGameLog(evt.accepted ? `🤝 Giao dịch giữa ${playerName(evt.fromId)} và ${playerName(evt.toId)} thành công.` : `❌ Giao dịch bị từ chối.`);
-        break;
-      }
-      case 'JAIL_WAIT':
-        UI.addGameLog(`🔒 ${playerName(evt.playerId)} vẫn ở Nhà Giam (lượt ${evt.turn}/${3}).`);
-        break;
-      case 'JAIL_RELEASED':
-        UI.addGameLog(`🔓 ${playerName(evt.playerId)} đổ đôi ra khỏi Nhà Giam!`);
         break;
       case 'GAME_OVER':
         UI.showGameOverModal(gameOverText());

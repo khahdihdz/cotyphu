@@ -196,14 +196,6 @@
       <span>Âm thanh</span>
     </label>
     <label class="field">
-      <span>Chế độ hiển thị bàn cờ</span>
-      <select id="setting-renderer">
-        <option value="phaser" selected>2D hoạt hình trên đảo (Phaser)</option>
-        <option value="3d">Đảo 3D</option>
-        <option value="dom">Đơn giản (bảng DOM)</option>
-      </select>
-    </label>
-    <label class="field">
       <span>Ngôn ngữ</span>
       <select id="setting-lang">
         <option value="vi" selected>Tiếng Việt</option>
@@ -276,9 +268,7 @@
   ⚠️ Mất kết nối — Đang kết nối lại...
 </div>
 
-<!-- game.js là module gốc duy nhất; nó tự import ui.js / websocket.js / gameLogic.js /
-     ai.js / protocol.js và lớp hiển thị game/gameAdapter.js → game/phaserGame.js +
-     game/scenes + game/render (Phaser 3 vendor-local: vendor/phaser.esm.min.js). -->
+<!-- game.js là module gốc duy nhất; nó tự import ui.js / websocket.js / gameLogic.js / ai.js / protocol.js -->
 <script type="module" src="game.js"></script>
 <script type="module" src="island3d.js"></script>
 <script>

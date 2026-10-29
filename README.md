@@ -69,14 +69,7 @@ monopoly-webgame/
 │   ├── ui.js               # toàn bộ thao tác DOM/hiển thị
 │   ├── gameLogic.js         # bản sao luật chơi (dùng cho chế độ offline)
 │   ├── ai.js                 # bản sao AI (dùng cho chế độ offline)
-│   ├── cards.js              # bản sao nguồn thẻ bài (gameLogic.js cần import)
 │   ├── protocol.js            # bản sao hằng số giao thức
-│   ├── game/                  # lớp hiển thị Phaser 3 (2D đảo nhiệt đới)
-│   │   ├── gameAdapter.js      # chọn view: Phaser / DOM / 3D
-│   │   ├── phaserGame.js       # vòng đời Phaser.Game + resize
-│   │   ├── scenes/             # bootScene, boardScene
-│   │   └── render/             # layout, board, property, pawn renderers
-│   ├── vendor/phaser.esm.min.js # Phaser 3.90.0 vendor-local (không CDN, MIT)
 │   └── assets/
 ├── src/
 │   ├── worker.js           # entry point Cloudflare Worker
@@ -89,23 +82,6 @@ monopoly-webgame/
 ├── .gitignore
 └── LICENSE
 ```
-
-Vì `src/gameLogic.js` cần `src/cards.js`, bản sao trong `public/` bao gồm cả
-`public/cards.js`. Toàn bộ 4 cặp file `gameLogic.js`, `ai.js`, `cards.js`,
-`protocol.js` **phải giống hệt nhau hàng byte**, và `scripts/test-game.mjs`
-kiểm tra điều này mỗi lần chạy test (sync-guard).
-
-### Chế độ hiển thị bàn cờ
-
-- **"2D hoạt hình trên đảo (Phaser)" (mặc định)**: bàn cờ 2D vẽ bằng Phaser 3
-  vendor-local (`public/vendor/phaser.esm.min.js`, không dùng CDN) với phong
-  cách đảo nhiệt đới. Bất động sản hiển thị vòng màu chủ sở hữu, nhà/khách sạn
-  theo cấp, dấu thế chấp; token dùng ảnh SVG gốc có fallback; `prefers-reduced-
-  motion` được tôn trọng. Chi tiết kiến trúc: `docs/PHASER_ARCHITECTURE.md`.
-- **"Đảo 3D"**: view Three.js trước đó (cần tải lại trang sau khi đổi setting).
-- **"Đơn giản (DOM)"**: bảng cờ DOM, phù hợp thiết bị rất yếu.
-
-Giấy phép/ nguồn tài nguyên: `public/assets/ASSET_LICENSES.md`.
 
 ## Chạy local
 
@@ -146,6 +122,7 @@ qua giao diện:
    `co-ty-phu-online.<subdomain>.workers.dev` — mở domain đó để chơi.
 6. Mỗi lần bạn `git push` lên nhánh `main`, Cloudflare sẽ tự động build & deploy
    lại (CI/CD tích hợp sẵn).
+
 ### Cấu hình Cloudflare Worker
 
 `wrangler.toml` đã khai báo sẵn:
@@ -195,8 +172,8 @@ code API key/secret vào source code.
 
 ## Ghi chú thiết kế
 
-- Bàn cờ có 40 ô, xếp theo chu vi lưới 11×11 (tên ô, thẻ bài là nội dung gốc;
-  lưới 11×11 có 4 ô góc: Xuất Phát, Nhà Giam, Bãi Nghỉ và Phố 30).
+- Bàn cờ có 32 ô, xếp theo chu vi lưới 9×9 (giống bố cục board-game đầu tư cổ
+  điển) nhưng toàn bộ tên ô, thẻ bài là nội dung gốc.
 - Cấp thuê/nâng cấp được đơn giản hoá thành 5 cấp (0–4 nhà + khách sạn) để dễ
   bảo trì.
 - Thế chấp/chuộc lại, đấu giá, luật Nhà Giam (đổ đôi 3 lần, nộp phạt, thẻ ra
