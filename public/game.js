@@ -668,9 +668,11 @@ async function applyEvents(events) {
         break;
       case 'PLAYER_MOVED': {
         UI.addGameLog(`${playerName(evt.playerId)} di chuyển tới ${Game.BOARD[evt.to]?.name}.`);
-        // Path chính thức do engine đưa trong event (src/ public/ gameLogic cùng tên).
-        // Thẻ teleport/di chuyển đặc biệt: nhảy thẳng tới đích, không đi từng bước.
-        const path = Array.isArray(evt.path) && evt.path.length ? evt.path : buildMovePath(evt.from, evt.to, evt.steps);
+        // Path chính thức do engine đưa trong event (không gồm ô xuất phát) —
+        // thêm `evt.from` vào đầu để quy ước `path[0]` = vị trí hiện tại như DOM.
+        const path = Array.isArray(evt.path) && evt.path.length
+          ? [evt.from, ...evt.path]
+          : buildMovePath(evt.from, evt.to, evt.steps);
         const teleport = !!evt.teleport || evt.reason === 'TELEPORT';
         BoardView.clearTileSignals();
         await BoardView.animateTokenMove(evt.playerId, path, { teleport });
