@@ -29,7 +29,7 @@ export class RoomConnection {
     const params = new URLSearchParams({ room, name });
     if (action) params.set('action', action);
     if (playerId) params.set('playerId', playerId);
-    return \`\${proto}//\${endpoint.host}\${endpoint.pathname.replace(/\/+$/, '')}/ws?\${params.toString()}\`;
+    return proto + '//' + endpoint.host + endpoint.pathname.replace(/\\/+$/, '') + '/ws?' + params.toString();
   }
 
   connect({ room, name, action, playerId }) {
