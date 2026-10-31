@@ -8,7 +8,11 @@ import { C2S, S2C } from './protocol.js';
 import { RoomConnection } from './websocket.js';
 import * as UI from './ui.js';
 
-let board3dInstance = null;\nlet board3dLoadPromise = null;\nlet board3dUnavailableNotified = false;\n\nconst LS_KEYS = { settings: 'ctp_settings_v1', save: 'ctp_offline_save_v1' };
+let board3dInstance = null;
+let board3dLoadPromise = null;
+let board3dUnavailableNotified = false;
+
+const LS_KEYS = { settings: 'ctp_settings_v1', save: 'ctp_offline_save_v1' };
 
 const App = {
   mode: null, // 'offline' | 'online'
@@ -230,7 +234,10 @@ async function runOfflineAuctionAILoopIfNeeded() {
 async function doCreateRoom() {
   const name = document.getElementById('create-name').value.trim() || 'Người chơi';
   try {
-    const workerUrl = window.CTP_CONFIG?.workerUrl || '';\n    const apiUrl = `${workerUrl.replace(/\/$/, '')}/api/create-room`;\n    const res = await fetch(apiUrl);\n    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const workerUrl = window.CTP_CONFIG?.workerUrl || '';
+    const apiUrl = `${workerUrl.replace(/\/$/, '')}/api/create-room`;
+    const res = await fetch(apiUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     connectOnline({ room: data.roomId, name, action: 'create' });
   } catch (_err) {
