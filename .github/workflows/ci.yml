@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
   pull_request:
     branches: [main]
 
@@ -18,7 +18,7 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
-      - name: Build production
+      - name: Check JavaScript syntax\n        run: npm run check\n      - name: Build production
         run: npm run build
       - name: Test game engine
         run: npm test
