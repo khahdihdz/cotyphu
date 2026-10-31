@@ -12,13 +12,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup PHP\n        uses: shivammathur/setup-php@v2\n        with:\n          php-version: '8.2'\n      - name: PHP syntax check\n        run: |\n          php -l index.php\n          php -l config/app.php.example\n      - name: Setup Node.js
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: PHP syntax check
+        run: |
+          php -l index.php
+          php -l config/app.php.example
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Install dependencies
         run: npm install
-      - name: Check JavaScript syntax\n        run: npm run check\n      - name: Build production
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Build production
         run: npm run build
       - name: Test game engine
         run: npm test
