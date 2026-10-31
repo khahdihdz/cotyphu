@@ -1,7 +1,7 @@
 {
   "name": "co-ty-phu-online",
-  "version": "1.1.0",
-  "description": "Webgame Cờ Tỷ Phú online — HTML5 + Vanilla JS + Cloudflare Workers + WebSocket + AI",
+  "version": "1.2.0",
+  "description": "Cờ Tỷ Phú browser game — Three.js, PHP 8.2, Cloudflare Workers, WebSocket and AI",
   "type": "module",
   "private": true,
   "scripts": {
@@ -9,10 +9,11 @@
     "build": "node scripts/build.mjs",
     "test": "node scripts/test-game.mjs",
     "preview": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "check": "node --check public/game.js && node --check public/websocket.js && node --check public/board3d.js && node --check src/worker.js && node --check src/gameRoom.js"
   },
   "devDependencies": {
     "wrangler": "^3.90.0"
   },
   "license": "MIT"
-}
+}\n
