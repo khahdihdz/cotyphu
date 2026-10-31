@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Node.js
+      - name: Setup PHP\n        uses: shivammathur/setup-php@v2\n        with:\n          php-version: '8.2'\n      - name: PHP syntax check\n        run: |\n          php -l index.php\n          php -l config/app.php.example\n      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
