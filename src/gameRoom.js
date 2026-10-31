@@ -4,7 +4,7 @@ import { C2S, S2C, ERROR_CODES, makeError } from './protocol.js';
 import * as Game from './gameLogic.js';
 import * as AI from './ai.js';
 
-const MAX_PLAYERS = 6;
+const MAX_PLAYERS = 4;
 const DISCONNECT_GRACE_MS = 60_000;
 const CHAT_RATE_LIMIT = { windowMs: 5000, max: 5 };
 const MAX_CHAT_LEN = 500;
