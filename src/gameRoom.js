@@ -49,6 +49,11 @@ export class GameRoom {
   roomIdFallback() { return this.game?.roomId || genRoomSuffixSafe(); }
 
   async handleNewSession(ws, roomId, name, wantCreate, rejoinPlayerId) {
+    if (wantCreate && this.game) {
+      this.safeSend(ws, makeError(ERROR_CODES.ROOM_NOT_FOUND, { detail: 'Mã phòng đã tồn tại. Hãy tạo phòng khác.' }));
+      ws.close(1008, 'room code collision');
+      return;
+    }
     if (wantCreate && !this.game) {
       const hostId = crypto.randomUUID();
       const host = Game.createPlayer({ id: hostId, name, color: Game.PLAYER_COLORS[0] });
