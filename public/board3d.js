@@ -1,11 +1,11 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js';
+import * as THREE from './vendor/three/build/three.module.js';
+import { OrbitControls } from './vendor/three/examples/jsm/controls/OrbitControls.js';
 
 const GROUP={A:'#e85a4f',B:'#f2b84b',C:'#3fc1c9',D:'#9b8cf2',E:'#5ec97a',F:'#f27db0',G:'#6fcf97',H:'#f2994a',STATION:'#8c97b8'};
 const SPECIAL={START:'#d5a83d',TAX:'#d65d5d',CHANCE:'#8e79c8',EVENT:'#4f9baf',BONUS:'#54a77a',REST:'#718096',JAIL:'#bf7657',GO_TO_JAIL:'#bf5a5a',TELEPORT:'#6977ba'};
 const grid=id=>id<=10?{r:11,c:11-id}:id<=20?{r:11-(id-10),c:1}:id<=30?{r:1,c:id-19}:{r:id-29,c:11};
 const pos=(id,y=.15)=>{const p=grid(id);return new THREE.Vector3(p.c-6,y,p.r-6);};
-function labelMap(tile){const c=document.createElement('canvas');c.width=256;c.height=128;const x=c.getContext('2d');x.fillStyle='#fff8e8';x.fillRect(0,0,256,128);x.fillStyle='#263a48';x.textAlign='center';x.font='bold 25px sans-serif';x.fillText(String(tile.name||'').slice(0,22),128,48);x.font='bold 18px sans-serif';if(tile.price)x.fillText(new Intl.NumberFormat('vi-VN').format(tile.price)+' đ',128,94);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
+function labelMap(tile){const c=document.createElement('canvas');c.width=256;c.height=128;const x=c.getContext('2d');x.fillStyle='#fff8e8';x.fillRect(0,0,256,128);x.fillStyle='#263a48';x.textAlign='center';x.font='bold 25px sans-serif';x.fillText(String(tile.name||'').slice(0,22),128,48);x.font='bold 18px sans-serif';if(tile.price)x.fillText(new Intl.NumberFormat('vi-VN').format(tile.price)+' ₫',128,94);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
 
 export class Board3D {
   constructor(){this.host=null;this.scene=null;this.camera=null;this.renderer=null;this.controls=null;this.pawns=new Map();this.dice=[];this.frame=0;this.observer=null;this.lastDice='';this.reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;}
