@@ -5,7 +5,7 @@ const GROUP={A:'#e85a4f',B:'#f2b84b',C:'#3fc1c9',D:'#9b8cf2',E:'#5ec97a',F:'#f27
 const SPECIAL={START:'#d5a83d',TAX:'#d65d5d',CHANCE:'#8e79c8',EVENT:'#4f9baf',BONUS:'#54a77a',REST:'#718096',JAIL:'#bf7657',GO_TO_JAIL:'#bf5a5a',TELEPORT:'#6977ba'};
 const grid=id=>id<=10?{r:11,c:11-id}:id<=20?{r:11-(id-10),c:1}:id<=30?{r:1,c:id-19}:{r:id-29,c:11};
 const pos=(id,y=.15)=>{const p=grid(id);return new THREE.Vector3(p.c-6,y,p.r-6);};
-const disposeObject=(root)=>root?.traverse?.(o=>{o.geometry?.dispose();if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material?.dispose();});
+const disposeObject=(root)=>root?.traverse?.(o=>{o.geometry?.dispose();if(Array.isArray(o.material))o.material.forEach(m=>{m.map?.dispose();m.dispose();});else if(o.material){o.material.map?.dispose();o.material.dispose();}});
 function labelMap(tile){
   const c=document.createElement('canvas');c.width=256;c.height=128;
   const x=c.getContext('2d');x.fillStyle='#fff8e8';x.fillRect(0,0,256,128);
