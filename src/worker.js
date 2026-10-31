@@ -10,12 +10,10 @@ export { GameRoom } from './gameRoom.js';
 
 const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // bỏ ký tự dễ nhầm (I,O,0,1)
 
-function randomRoomCode(len = 4) {
-  let out = '';
-  for (let i = 0; i < len; i += 1) {
-    out += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
-  }
-  return out;
+function randomRoomCode(len = 6) {
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, value => ROOM_CODE_CHARS[value % ROOM_CODE_CHARS.length]).join('');
 }
 
 function withCORS(response) {
@@ -35,7 +33,7 @@ export default {
     }
 
     if (url.pathname === '/api/create-room') {
-      const roomId = randomRoomCode(4);
+      const roomId = randomRoomCode(6);
       return withCORS(
         new Response(JSON.stringify({ roomId }), {
           headers: { 'Content-Type': 'application/json' },

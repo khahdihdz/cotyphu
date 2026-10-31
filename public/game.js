@@ -8,6 +8,10 @@ import { C2S, S2C } from './protocol.js';
 import { RoomConnection } from './websocket.js';
 import * as UI from './ui.js';
 
+let board3dInstance = null;
+let board3dLoadPromise = null;
+let board3dUnavailableNotified = false;
+
 const LS_KEYS = { settings: 'ctp_settings_v1', save: 'ctp_offline_save_v1' };
 
 const App = {
@@ -230,7 +234,10 @@ async function runOfflineAuctionAILoopIfNeeded() {
 async function doCreateRoom() {
   const name = document.getElementById('create-name').value.trim() || 'Người chơi';
   try {
-    const res = await fetch('/api/create-room');
+    const workerUrl = window.CTP_CONFIG?.workerUrl || '';
+    const apiUrl = `${workerUrl.replace(/\/$/, '')}/api/create-room`;
+    const res = await fetch(apiUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     connectOnline({ room: data.roomId, name, action: 'create' });
   } catch (_err) {
@@ -573,16 +580,41 @@ function promptIncomingTrade(offer) {
   );
 }
 
+async function ensureBoard3D() {
+  if (board3dInstance) { board3dInstance.update(App.state); return; }
+  if (board3dLoadPromise) return board3dLoadPromise;
+  board3dLoadPromise = (async () => {
+    try {
+      const module = await import('./board3d.js');
+      const host = document.getElementById('board-3d-scene');
+      if (!host) return;
+      board3dInstance = new module.Board3D();
+      board3dInstance.mount(host, Game.BOARD);
+      document.querySelector('.board-wrap')?.classList.add('is-3d-enabled');
+      board3dInstance.update(App.state);
+    } catch (error) {
+      console.warn('Three.js unavailable; keeping the HTML board.', error);
+      if (!board3dUnavailableNotified) {
+        UI.showToast('Không tải được thư viện 3D. Bàn cờ dự phòng vẫn hoạt động.', 'error');
+        board3dUnavailableNotified = true;
+      }
+    }
+  })();
+  return board3dLoadPromise;
+}
+
 /* ============================== RENDER LOOP ============================== */
 
 function enterBoardScreen() {
   UI.navigateTo('screen-board');
   UI.initBoard(Game.BOARD);
+  ensureBoard3D();
   renderAll();
 }
 
 function renderAll() {
   if (!App.state) return;
+  board3dInstance?.update(App.state);
   UI.renderOwnership(Game.BOARD, App.state.players);
   UI.renderTokens(App.state.players);
   UI.renderHUD(App.state, App.myPlayerId);

@@ -23,11 +23,13 @@ export class RoomConnection {
   }
 
   buildUrl({ room, name, action, playerId }) {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const configured = window.CTP_CONFIG?.workerUrl || '';
+    const endpoint = new URL(configured || location.origin, location.href);
+    const proto = endpoint.protocol === 'https:' ? 'wss:' : 'ws:';
     const params = new URLSearchParams({ room, name });
     if (action) params.set('action', action);
     if (playerId) params.set('playerId', playerId);
-    return `${proto}//${location.host}/ws?${params.toString()}`;
+    return proto + '//' + endpoint.host + endpoint.pathname.replace(/\/+$/, '') + '/ws?' + params.toString();
   }
 
   connect({ room, name, action, playerId }) {

@@ -4,7 +4,7 @@ import { C2S, S2C, ERROR_CODES, makeError } from './protocol.js';
 import * as Game from './gameLogic.js';
 import * as AI from './ai.js';
 
-const MAX_PLAYERS = 6;
+const MAX_PLAYERS = 4;
 const DISCONNECT_GRACE_MS = 60_000;
 const CHAT_RATE_LIMIT = { windowMs: 5000, max: 5 };
 const MAX_CHAT_LEN = 500;
@@ -49,6 +49,11 @@ export class GameRoom {
   roomIdFallback() { return this.game?.roomId || genRoomSuffixSafe(); }
 
   async handleNewSession(ws, roomId, name, wantCreate, rejoinPlayerId) {
+    if (wantCreate && this.game) {
+      this.safeSend(ws, makeError(ERROR_CODES.ROOM_NOT_FOUND, { detail: 'Mã phòng đã tồn tại. Hãy tạo phòng khác.' }));
+      ws.close(1008, 'room code collision');
+      return;
+    }
     if (wantCreate && !this.game) {
       const hostId = crypto.randomUUID();
       const host = Game.createPlayer({ id: hostId, name, color: Game.PLAYER_COLORS[0] });

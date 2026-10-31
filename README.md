@@ -8,7 +8,7 @@ hình ảnh trong game là nội dung gốc.
 
 ## Tính năng
 
-- **Chơi online nhiều người** (2–4 người, tạo phòng bằng mã 4 ký tự, hoặc kết
+- **Chơi online nhiều người** (2–4 người, tạo phòng bằng mã 6 ký tự, hoặc kết
   hợp với AI để lấp đầy phòng).
 - **Chơi offline** với AI ngay trên trình duyệt, không cần mạng, tự lưu tiến
   trình bằng `localStorage`.
@@ -33,13 +33,13 @@ hình ảnh trong game là nội dung gốc.
   bộ lại trạng thái; nếu mất kết nối quá 60 giây, AI tạm thời tiếp quản để
   ván chơi không bị treo.
 - **Chat** trong phòng, có escape HTML và rate limit chống spam.
-- **Responsive** từ 320px đến màn hình desktop lớn, tối ưu chạm (44×44px).
+- **Bàn cờ 3D Three.js** với ô đất dạng khối 3D, quân cờ 3D, ánh sáng, bóng đổ và camera xoay/zoom; HTML board vẫn là fallback.\n- **Responsive** từ 320px đến màn hình desktop lớn, tối ưu chạm (44×44px).
 
 ## Kiến trúc
 
 ```
 Người chơi
-   │  HTML5 / CSS3 / Vanilla JS (public/)
+   │  HTML5 / CSS3 / Vanilla JS + Three.js (public/)
    ▼
 Cloudflare Worker (src/worker.js)
    │  định tuyến /ws theo mã phòng
@@ -170,9 +170,9 @@ code API key/secret vào source code.
 | Mất kết nối liên tục không tự nối lại | Trình duyệt chặn WebSocket hoặc mạng chặn `wss://` | Kiểm tra tường lửa/mạng công ty, thử mạng khác |
 | Static assets 404 | Thiếu khai báo `[assets]` trong `wrangler.toml` hoặc thư mục `public/` không được commit | Kiểm tra `wrangler.toml` và `.gitignore` |
 
-## Ghi chú thiết kế
+## PHP 8.2 / DirectAdmin (frontend riêng)\n\nCó thể host giao diện trên DirectAdmin bằng PHP 8.2, không cần MySQL, Node.js hoặc tiến trình nền. Upload toàn bộ repository vào document root để `index.php` phục vụ `public/index.html`. Sao chép `config/app.php.example` thành `config/app.php` và đặt Worker URL, hoặc dùng biến môi trường `CTP_WORKER_URL`. Hướng dẫn chi tiết: [docs/DEPLOYMENT_PHP.md](docs/DEPLOYMENT_PHP.md).\n\nCloudflare Workers vẫn phải được deploy riêng; frontend gọi API và WebSocket tới Worker URL đã cấu hình. Three.js được tải lazy từ jsDelivr khi mở bàn cờ; nếu CDN/WebGL không khả dụng, bàn cờ HTML hiện có vẫn hoạt động.\n\n## Ghi chú thiết kế
 
-- Bàn cờ có 32 ô, xếp theo chu vi lưới 9×9 (giống bố cục board-game đầu tư cổ
+- Bàn cờ có 40 ô, xếp theo chu vi lưới 11×11 (giống bố cục board-game đầu tư cổ
   điển) nhưng toàn bộ tên ô, thẻ bài là nội dung gốc.
 - Cấp thuê/nâng cấp được đơn giản hoá thành 5 cấp (0–4 nhà + khách sạn) để dễ
   bảo trì.
@@ -199,3 +199,33 @@ code API key/secret vào source code.
   toàn bộ quyết định của AI chỉ dựa trên `state` hiện tại, giống một người
   chơi thật. AI có thêm logic riêng cho đấu giá (`decideAuctionAction`) và
   quyết định trong Nhà Giam (`decideJailAction`), tuỳ theo cá tính.
+
+
+---
+
+## English
+
+**Cờ Tỷ Phú Online** is a browser board game with offline AI and a Cloudflare
+Durable Objects multiplayer backend. The current upgrade adds a lazy-loaded
+Three.js board scene while retaining the existing HTML board as a fallback.
+The online room capacity is four players.
+
+### Architecture
+
+- **Frontend:** HTML5, CSS, JavaScript ES modules and Three.js.
+- **PHP hosting:** PHP 8.2 entry point for DirectAdmin; no MySQL, Node.js runtime
+  or background process is required on the PHP host.
+- **Multiplayer:** Cloudflare Workers, Durable Objects and WebSocket. The Worker
+  remains authoritative for game state and player actions.
+
+### DirectAdmin deployment
+
+Upload the repository root, including `index.php` and `public/`, to the
+domain document root. Enable PHP 8.2 and HTTPS. Copy
+`config/app.php.example` to `config/app.php` and configure the deployed
+Worker URL, or set `CTP_WORKER_URL`. Deploy the Worker separately with
+`wrangler.toml`. See [PHP deployment guide](docs/DEPLOYMENT_PHP.md).
+
+The Three.js renderer is loaded when the board opens. If WebGL or the CDN is
+unavailable, the original HTML board remains available. CI checks PHP syntax,
+JavaScript syntax, production assets and game-engine tests.
