@@ -2,6 +2,7 @@
 // Quản lý kết nối WebSocket tới Cloudflare Worker: kết nối, tự động reconnect
 // với exponential backoff (1s, 2s, 4s, 8s...), ping/pong giữ kết nối, và một
 // cơ chế pub/sub đơn giản để game.js lắng nghe message từ server.
+import './runtime-config.js';
 import { C2S } from './protocol.js';
 
 const BACKOFF_STEPS_MS = [1000, 2000, 4000, 8000, 8000, 8000];
