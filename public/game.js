@@ -593,6 +593,9 @@ async function ensureBoard3D() {
       document.querySelector('.board-wrap')?.classList.add('is-3d-enabled');
       board3dInstance.update(App.state);
     } catch (error) {
+      board3dInstance?.destroy?.();
+      board3dInstance = null;
+      document.querySelector('.board-wrap')?.classList.remove('is-3d-enabled');
       console.warn('Three.js unavailable; keeping the HTML board.', error);
       if (!board3dUnavailableNotified) {
         UI.showToast('Không tải được thư viện 3D. Bàn cờ dự phòng vẫn hoạt động.', 'error');
