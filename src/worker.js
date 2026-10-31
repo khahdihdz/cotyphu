@@ -35,7 +35,7 @@ export default {
     }
 
     if (url.pathname === '/api/create-room') {
-      const roomId = randomRoomCode(4);
+      const roomId = randomRoomCode(6);
       return withCORS(
         new Response(JSON.stringify({ roomId }), {
           headers: { 'Content-Type': 'application/json' },
