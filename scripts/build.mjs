@@ -1,4 +1,4 @@
-import { readFile, access, writeFile } from 'node:fs/promises';
+import { readFile, access, writeFile, mkdir, copyFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(process.cwd());
@@ -30,7 +30,40 @@ for (const relative of assetPaths) {
 }
 console.log(`✓ ${assetPaths.length} manifest asset entries tồn tại`);
 
-// URL của Worker là endpoint công khai, không phải secret. Chỉ nhận HTTPS.
+// Đóng gói Three.js và OrbitControls vào chính frontend, không phụ thuộc CDN runtime.
+const threeRoot = resolve(root, 'node_modules/three');
+const vendorRoot = resolve(root, 'public/vendor/three');
+const controlsDir = resolve(vendorRoot, 'examples/jsm/controls');
+await mkdir(resolve(vendorRoot, 'build'), { recursive: true });
+await mkdir(controlsDir, { recursive: true });
+await copyFile(resolve(threeRoot, 'build/three.module.js'), resolve(vendorRoot, 'build/three.module.js'));
+const controlsSource = await readFile(resolve(threeRoot, 'examples/jsm/controls/OrbitControls.js'), 'utf8');
+const controlsLocal = controlsSource.replace(
+  /from ['"]three['"]/g,
+  "from '../../../build/three.module.js'"
+);
+if (controlsLocal === controlsSource) {
+  throw new Error('BUILD CHECK FAILED: không tìm thấy import three trong OrbitControls.');
+}
+await writeFile(resolve(controlsDir, 'OrbitControls.js'), controlsLocal, 'utf8');
+await copyFile(resolve(threeRoot, 'LICENSE'), resolve(vendorRoot, 'LICENSE'));
+await access(resolve(vendorRoot, 'build/three.module.js'));
+await access(resolve(controlsDir, 'OrbitControls.js'));
+console.log('✓ Three.js 0.179.1 + OrbitControls được đóng gói local');
+
+// Viết import map local cho mọi module dùng bare specifier three.
+const htmlPath = resolve(root, 'public/index.html');
+const htmlSource = await readFile(htmlPath, 'utf8');
+const importMap = '<script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>';
+const importStart = htmlSource.indexOf('<script type="importmap">');
+const importEnd = htmlSource.indexOf('</script>', importStart);
+if (importStart < 0 || importEnd < 0) {
+  throw new Error('BUILD CHECK FAILED: thiếu import map trong public/index.html.');
+}
+const htmlWithLocalImportMap = htmlSource.slice(0, importStart) + importMap + htmlSource.slice(importEnd + '</script>'.length);
+await writeFile(htmlPath, htmlWithLocalImportMap, 'utf8');
+console.log('✓ Import map trỏ tới Three.js local');
+
 const workerUrl = (process.env.CTP_WORKER_URL || '').trim().replace(/\/+$/, '');
 if (workerUrl) {
   const parsed = new URL(workerUrl);

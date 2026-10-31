@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'co-ty-phu-shell-';
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const APP_SHELL = [
   './',
@@ -11,6 +11,9 @@ const APP_SHELL = [
   './ai.js',
   './protocol.js',
   './websocket.js',
+  './board3d.js',
+  './board3d.css',
+  './runtime-config.js',
   './manifest.webmanifest',
   './assets/icons/icon-192.svg',
   './assets/icons/icon-512.svg'

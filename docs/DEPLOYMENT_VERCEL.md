@@ -5,7 +5,7 @@ Kiến trúc production được tách thành hai dịch vụ:
 - **Vercel:** host frontend tĩnh trong `public/`; không chạy game server.
 - **Cloudflare Workers:** REST endpoint và WebSocket gateway.
 - **Durable Objects:** mỗi phòng là một GameRoom, lưu trạng thái ván trong SQLite-backed DO storage; không cần MySQL, VPS hoặc tiến trình nền.
-- **Trình duyệt:** HTML/CSS/JavaScript và Three.js; offline AI tiếp tục chạy cục bộ.
+- **Trình duyệt:** HTML/CSS/JavaScript và Three.js local; offline AI tiếp tục chạy cục bộ.
 
 ## 1. Deploy backend Cloudflare
 
@@ -69,4 +69,5 @@ Nếu không đặt biến, frontend dùng cùng origin để tương thích khi
 - Game state online phải tiếp tục được xác thực trong `src/gameRoom.js`; không chuyển quyền quyết định xúc xắc, tiền, giao dịch hoặc lượt chơi về client.
 - Durable Object storage có thể giữ state phòng qua lần khởi động lại isolate; đây không phải cơ chế lưu hồ sơ/tài khoản lâu dài.
 - CORS hiện tại của Worker đang mở rộng (`*`). Nếu cần giới hạn domain, bổ sung allowlist cho cả HTTP và WebSocket trước khi mở rộng public.
-- Three.js/OrbitControls hiện tải từ jsDelivr; cần mạng để tải renderer 3D lần đầu. Bàn cờ HTML fallback vẫn là phương án dự phòng.
+- Three.js 0.179.1 và OrbitControls được đóng gói local trong `public/vendor/three/`; build copy chúng từ npm dependency và kèm giấy phép MIT. Renderer 3D không cần tải core Three.js từ CDN.
+- Google Fonts là tài nguyên ngoài tùy chọn; font hệ thống là fallback nếu CDN font không truy cập được.
