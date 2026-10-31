@@ -8,7 +8,7 @@ hình ảnh trong game là nội dung gốc.
 
 ## Tính năng
 
-- **Chơi online nhiều người** (2–4 người, tạo phòng bằng mã 4 ký tự, hoặc kết
+- **Chơi online nhiều người** (2–4 người, tạo phòng bằng mã 6 ký tự, hoặc kết
   hợp với AI để lấp đầy phòng).
 - **Chơi offline** với AI ngay trên trình duyệt, không cần mạng, tự lưu tiến
   trình bằng `localStorage`.
@@ -33,13 +33,13 @@ hình ảnh trong game là nội dung gốc.
   bộ lại trạng thái; nếu mất kết nối quá 60 giây, AI tạm thời tiếp quản để
   ván chơi không bị treo.
 - **Chat** trong phòng, có escape HTML và rate limit chống spam.
-- **Responsive** từ 320px đến màn hình desktop lớn, tối ưu chạm (44×44px).
+- **Bàn cờ 3D Three.js** với ô đất dạng khối 3D, quân cờ 3D, ánh sáng, bóng đổ và camera xoay/zoom; HTML board vẫn là fallback.\n- **Responsive** từ 320px đến màn hình desktop lớn, tối ưu chạm (44×44px).
 
 ## Kiến trúc
 
 ```
 Người chơi
-   │  HTML5 / CSS3 / Vanilla JS (public/)
+   │  HTML5 / CSS3 / Vanilla JS + Three.js (public/)
    ▼
 Cloudflare Worker (src/worker.js)
    │  định tuyến /ws theo mã phòng
@@ -170,9 +170,9 @@ code API key/secret vào source code.
 | Mất kết nối liên tục không tự nối lại | Trình duyệt chặn WebSocket hoặc mạng chặn `wss://` | Kiểm tra tường lửa/mạng công ty, thử mạng khác |
 | Static assets 404 | Thiếu khai báo `[assets]` trong `wrangler.toml` hoặc thư mục `public/` không được commit | Kiểm tra `wrangler.toml` và `.gitignore` |
 
-## Ghi chú thiết kế
+## PHP 8.2 / DirectAdmin (frontend riêng)\n\nCó thể host giao diện trên DirectAdmin bằng PHP 8.2, không cần MySQL, Node.js hoặc tiến trình nền. Upload toàn bộ repository vào document root để `index.php` phục vụ `public/index.html`. Sao chép `config/app.php.example` thành `config/app.php` và đặt Worker URL, hoặc dùng biến môi trường `CTP_WORKER_URL`. Hướng dẫn chi tiết: [docs/DEPLOYMENT_PHP.md](docs/DEPLOYMENT_PHP.md).\n\nCloudflare Workers vẫn phải được deploy riêng; frontend gọi API và WebSocket tới Worker URL đã cấu hình. Three.js được tải lazy từ jsDelivr khi mở bàn cờ; nếu CDN/WebGL không khả dụng, bàn cờ HTML hiện có vẫn hoạt động.\n\n## Ghi chú thiết kế
 
-- Bàn cờ có 32 ô, xếp theo chu vi lưới 9×9 (giống bố cục board-game đầu tư cổ
+- Bàn cờ có 40 ô, xếp theo chu vi lưới 11×11 (giống bố cục board-game đầu tư cổ
   điển) nhưng toàn bộ tên ô, thẻ bài là nội dung gốc.
 - Cấp thuê/nâng cấp được đơn giản hoá thành 5 cấp (0–4 nhà + khách sạn) để dễ
   bảo trì.
