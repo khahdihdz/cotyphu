@@ -16,7 +16,7 @@ $file = __DIR__ . '/public/index.html';
 if (!is_file($file)) { http_response_code(500); exit('Missing public/index.html. Upload the complete repository.'); }
 $html = file_get_contents($file);
 $config = json_encode(['workerUrl'=>$workerUrl], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_UNESCAPED_SLASHES);
-$html = preg_replace('/<head>/i', '<head>\n<base href="/public/">\n<script>window.CTP_CONFIG='.$config.';</script>', $html, 1);
+$html = preg_replace('/<head>/i', '<head>' . PHP_EOL . '<base href="/public/">' . PHP_EOL . '<script>window.CTP_CONFIG=' . $config . ';</script>', $html, 1);
 header('Content-Type: text/html; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
