@@ -199,3 +199,33 @@ code API key/secret vào source code.
   toàn bộ quyết định của AI chỉ dựa trên `state` hiện tại, giống một người
   chơi thật. AI có thêm logic riêng cho đấu giá (`decideAuctionAction`) và
   quyết định trong Nhà Giam (`decideJailAction`), tuỳ theo cá tính.
+
+
+---
+
+## English
+
+**Cờ Tỷ Phú Online** is a browser board game with offline AI and a Cloudflare
+Durable Objects multiplayer backend. The current upgrade adds a lazy-loaded
+Three.js board scene while retaining the existing HTML board as a fallback.
+The online room capacity is four players.
+
+### Architecture
+
+- **Frontend:** HTML5, CSS, JavaScript ES modules and Three.js.
+- **PHP hosting:** PHP 8.2 entry point for DirectAdmin; no MySQL, Node.js runtime
+  or background process is required on the PHP host.
+- **Multiplayer:** Cloudflare Workers, Durable Objects and WebSocket. The Worker
+  remains authoritative for game state and player actions.
+
+### DirectAdmin deployment
+
+Upload the repository root, including `index.php` and `public/`, to the
+domain document root. Enable PHP 8.2 and HTTPS. Copy
+`config/app.php.example` to `config/app.php` and configure the deployed
+Worker URL, or set `CTP_WORKER_URL`. Deploy the Worker separately with
+`wrangler.toml`. See [PHP deployment guide](docs/DEPLOYMENT_PHP.md).
+
+The Three.js renderer is loaded when the board opens. If WebGL or the CDN is
+unavailable, the original HTML board remains available. CI checks PHP syntax,
+JavaScript syntax, production assets and game-engine tests.
