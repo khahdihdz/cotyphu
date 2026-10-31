@@ -230,7 +230,7 @@ async function runOfflineAuctionAILoopIfNeeded() {
 async function doCreateRoom() {
   const name = document.getElementById('create-name').value.trim() || 'Người chơi';
   try {
-    const workerUrl = window.CTP_CONFIG?.workerUrl || '';\n    const apiUrl = `${workerUrl.replace(/\\/$/, '')}/api/create-room`;\n    const res = await fetch(apiUrl);\n    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const workerUrl = window.CTP_CONFIG?.workerUrl || '';\n    const apiUrl = `${workerUrl.replace(/\/$/, '')}/api/create-room`;\n    const res = await fetch(apiUrl);\n    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     connectOnline({ room: data.roomId, name, action: 'create' });
   } catch (_err) {
@@ -601,11 +601,13 @@ async function ensureBoard3D() {
 function enterBoardScreen() {
   UI.navigateTo('screen-board');
   UI.initBoard(Game.BOARD);
+  ensureBoard3D();
   renderAll();
 }
 
 function renderAll() {
   if (!App.state) return;
+  board3dInstance?.update(App.state);
   UI.renderOwnership(Game.BOARD, App.state.players);
   UI.renderTokens(App.state.players);
   UI.renderHUD(App.state, App.myPlayerId);
