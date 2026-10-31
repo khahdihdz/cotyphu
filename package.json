@@ -8,12 +8,12 @@
     "dev": "wrangler dev",
     "build": "node scripts/build.mjs",
     "test": "node scripts/test-game.mjs",
+    "check": "node --check public/game.js && node --check public/websocket.js && node --check public/board3d.js && node --check src/worker.js && node --check src/gameRoom.js",
     "preview": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "check": "node --check public/game.js && node --check public/websocket.js && node --check public/board3d.js && node --check src/worker.js && node --check src/gameRoom.js"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^3.90.0"
   },
   "license": "MIT"
-}\n
+}
