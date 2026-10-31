@@ -8,7 +8,7 @@ import { C2S, S2C } from './protocol.js';
 import { RoomConnection } from './websocket.js';
 import * as UI from './ui.js';
 
-const LS_KEYS = { settings: 'ctp_settings_v1', save: 'ctp_offline_save_v1' };
+let board3dInstance = null;\nlet board3dLoadPromise = null;\nlet board3dUnavailableNotified = false;\n\nconst LS_KEYS = { settings: 'ctp_settings_v1', save: 'ctp_offline_save_v1' };
 
 const App = {
   mode: null, // 'offline' | 'online'
@@ -230,7 +230,7 @@ async function runOfflineAuctionAILoopIfNeeded() {
 async function doCreateRoom() {
   const name = document.getElementById('create-name').value.trim() || 'Người chơi';
   try {
-    const res = await fetch('/api/create-room');
+    const workerUrl = window.CTP_CONFIG?.workerUrl || '';\n    const apiUrl = `${workerUrl.replace(/\\/$/, '')}/api/create-room`;\n    const res = await fetch(apiUrl);\n    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     connectOnline({ room: data.roomId, name, action: 'create' });
   } catch (_err) {
@@ -571,6 +571,29 @@ function promptIncomingTrade(offer) {
     () => App.conn.send({ type: C2S.TRADE_RESPONSE, accept: true }),
     () => App.conn.send({ type: C2S.TRADE_RESPONSE, accept: false })
   );
+}
+
+async function ensureBoard3D() {
+  if (board3dInstance) { board3dInstance.update(App.state); return; }
+  if (board3dLoadPromise) return board3dLoadPromise;
+  board3dLoadPromise = (async () => {
+    try {
+      const module = await import('./board3d.js');
+      const host = document.getElementById('board-3d-scene');
+      if (!host) return;
+      board3dInstance = new module.Board3D();
+      board3dInstance.mount(host, Game.BOARD);
+      document.querySelector('.board-wrap')?.classList.add('is-3d-enabled');
+      board3dInstance.update(App.state);
+    } catch (error) {
+      console.warn('Three.js unavailable; keeping the HTML board.', error);
+      if (!board3dUnavailableNotified) {
+        UI.showToast('Không tải được thư viện 3D. Bàn cờ dự phòng vẫn hoạt động.', 'error');
+        board3dUnavailableNotified = true;
+      }
+    }
+  })();
+  return board3dLoadPromise;
 }
 
 /* ============================== RENDER LOOP ============================== */
