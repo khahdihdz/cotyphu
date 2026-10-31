@@ -51,6 +51,16 @@ await access(resolve(vendorRoot, 'build/three.module.js'));
 await access(resolve(controlsDir, 'OrbitControls.js'));
 console.log('✓ Three.js 0.179.1 + OrbitControls được đóng gói local');
 
+// Viết import map local cho mọi module dùng bare specifier three.
+const htmlPath = resolve(root, 'public/index.html');
+const htmlSource = await readFile(htmlPath, 'utf8');
+const importMap = '<script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>';
+if (!/<script type="importmap">[\\s\\S]*?<\\/script>/.test(htmlSource)) {
+  throw new Error('BUILD CHECK FAILED: thiếu import map trong public/index.html.');
+}
+await writeFile(htmlPath, htmlSource.replace(/<script type="importmap">[\\s\\S]*?<\\/script>/, importMap), 'utf8');
+console.log('✓ Import map trỏ tới Three.js local');
+
 const workerUrl = (process.env.CTP_WORKER_URL || '').trim().replace(/\/+$/, '');
 if (workerUrl) {
   const parsed = new URL(workerUrl);
