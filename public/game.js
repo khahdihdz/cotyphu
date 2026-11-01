@@ -605,9 +605,12 @@ async function ensureBoard3D() {
       board3dInstance?.destroy?.();
       board3dInstance = null;
       document.querySelector('.board-wrap')?.classList.remove('is-3d-enabled');
-      console.warn('Three.js unavailable; keeping the HTML board.', error);
+      console.error('Three.js initialization failed; keeping the HTML board.', error);
+      // Cho phép thử lại ở lần mở bàn cờ tiếp theo thay vì giữ Promise đã reject.
+      board3dLoadPromise = null;
+      const reason = error?.message ? String(error.message).slice(0, 110) : 'Lỗi tải module/WebGL';
       if (!board3dUnavailableNotified) {
-        UI.showToast('Không tải được thư viện 3D. Bàn cờ dự phòng vẫn hoạt động.', 'error');
+        UI.showToast(`Không tải được 3D: ${reason}`, 'error');
         board3dUnavailableNotified = true;
       }
     }
