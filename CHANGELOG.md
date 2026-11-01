@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Multiplayer session hardening
+
+- Added per-player cryptographically random session tokens for room reconnects.
+- Persisted room session credentials in the browser so a refresh can restore the same player.
+- Rejected reconnect attempts with an invalid token and closed stale sockets when a player reconnects elsewhere.
+- Corrected the lobby player-capacity label to match the four-player online limit.
+
+
 ## Unreleased — 3D and PHP hosting foundation
 
 - Added a lazy-loaded Three.js board with 3D tile meshes, pawn models, lighting,
