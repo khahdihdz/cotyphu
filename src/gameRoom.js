@@ -11,6 +11,11 @@ const MAX_CHAT_LEN = 500;
 
 function genRoomSuffixSafe() { return Math.random().toString(36).slice(2, 6).toUpperCase(); }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+function createSessionToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+}
 
 export class GameRoom {
   constructor(ctx, env) {
@@ -40,7 +45,8 @@ export class GameRoom {
     const name = (url.searchParams.get('name') || 'Người chơi').slice(0, 20);
     const wantCreate = url.searchParams.get('action') === 'create';
     const rejoinPlayerId = url.searchParams.get('playerId') || null;
-    this.handleNewSession(server, roomId, name, wantCreate, rejoinPlayerId).catch(err => {
+    const sessionToken = url.searchParams.get('sessionToken') || null;
+    this.handleNewSession(server, roomId, name, wantCreate, rejoinPlayerId, sessionToken).catch(err => {
       this.safeSend(server, makeError(ERROR_CODES.UNKNOWN, { detail: String(err?.message || err) }));
     });
     return new Response(null, { status: 101, webSocket: client });
@@ -48,7 +54,7 @@ export class GameRoom {
 
   roomIdFallback() { return this.game?.roomId || genRoomSuffixSafe(); }
 
-  async handleNewSession(ws, roomId, name, wantCreate, rejoinPlayerId) {
+  async handleNewSession(ws, roomId, name, wantCreate, rejoinPlayerId, sessionToken) {
     if (wantCreate && this.game) {
       this.safeSend(ws, makeError(ERROR_CODES.ROOM_NOT_FOUND, { detail: 'Mã phòng đã tồn tại. Hãy tạo phòng khác.' }));
       ws.close(1008, 'room code collision');
@@ -56,11 +62,13 @@ export class GameRoom {
     }
     if (wantCreate && !this.game) {
       const hostId = crypto.randomUUID();
+      const hostToken = createSessionToken();
       const host = Game.createPlayer({ id: hostId, name, color: Game.PLAYER_COLORS[0] });
       this.game = Game.createInitialState(roomId, [host]);
       await this.persist();
+      await this.ctx.storage.put(`session:${hostId}`, hostToken);
       this.sessions.set(ws, { playerId: hostId, chatTimestamps: [] });
-      this.safeSend(ws, { type: S2C.ROOM_CREATED, roomId, playerId: hostId, state: this.game });
+      this.safeSend(ws, { type: S2C.ROOM_CREATED, roomId, playerId: hostId, sessionToken: hostToken, state: this.game });
       this.broadcastRoomUpdate();
       return;
     }
@@ -70,9 +78,18 @@ export class GameRoom {
     if (rejoinPlayerId) {
       const existing = this.game.players.find(p => p.id === rejoinPlayerId);
       if (existing) {
+        const savedToken = await this.ctx.storage.get(`session:${rejoinPlayerId}`);
+        // Phòng được tạo trước khi có session token: cấp token khi người chơi cũ kết nối lại lần đầu.
+        if (savedToken && (!sessionToken || savedToken !== sessionToken)) {
+          this.safeSend(ws, makeError(ERROR_CODES.INVALID_ACTION, { detail: 'Phiên kết nối không hợp lệ. Hãy tham gia lại bằng thiết bị đã tạo phiên.' }));
+          ws.close(1008, 'invalid session');
+          return;
+        }
+        const nextToken = savedToken || createSessionToken();
+        await this.ctx.storage.put(`session:${rejoinPlayerId}`, nextToken);
         existing.connected = true; delete existing.disconnectedAt;
         this.sessions.set(ws, { playerId: rejoinPlayerId, chatTimestamps: [] });
-        this.safeSend(ws, { type: S2C.GAME_STATE, state: this.game, playerId: rejoinPlayerId });
+        this.safeSend(ws, { type: S2C.GAME_STATE, state: this.game, playerId: rejoinPlayerId, sessionToken: nextToken });
         this.broadcast({ type: S2C.PLAYER_JOINED, playerId: rejoinPlayerId, reconnect: true });
         await this.persist(); return;
       }
@@ -84,11 +101,13 @@ export class GameRoom {
       this.safeSend(ws, makeError(ERROR_CODES.ROOM_FULL)); ws.close(1008, 'room full'); return;
     }
     const newId = crypto.randomUUID();
+    const newToken = createSessionToken();
     const color = Game.PLAYER_COLORS[this.game.players.length % Game.PLAYER_COLORS.length];
     const player = Game.createPlayer({ id: newId, name, color });
     this.game.players.push(player); this.sessions.set(ws, { playerId: newId, chatTimestamps: [] });
     await this.persist();
-    this.safeSend(ws, { type: S2C.ROOM_CREATED, roomId, playerId: newId, state: this.game });
+    await this.ctx.storage.put(`session:${newId}`, newToken);
+    this.safeSend(ws, { type: S2C.ROOM_CREATED, roomId, playerId: newId, sessionToken: newToken, state: this.game });
     this.broadcast({ type: S2C.PLAYER_JOINED, playerId: newId, name });
     this.broadcastRoomUpdate();
   }
