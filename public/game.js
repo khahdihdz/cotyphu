@@ -289,9 +289,18 @@ async function handleServerMessage(msg) {
       break;
 
     case S2C.GAME_STATE:
+      App.myPlayerId = msg.playerId || App.myPlayerId;
       App.state = msg.state;
-      if (msg.events) await applyEvents(msg.events);
-      renderAll();
+      if (App.state.phase === 'LOBBY') {
+        UI.navigateTo('screen-lobby');
+        UI.renderLobby(App.state, App.myPlayerId, App.roomId);
+      } else {
+        const boardScreen = document.getElementById('screen-board');
+        if (!boardScreen?.classList.contains('screen--active')) enterBoardScreen();
+        if (msg.events) await applyEvents(msg.events);
+        renderAll();
+        if (App.state.phase === 'ENDED') UI.showGameOverModal(gameOverText());
+      }
       break;
 
     case S2C.AI_THINKING:
