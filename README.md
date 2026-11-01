@@ -8,7 +8,7 @@ Game Cờ Tỷ Phú nguyên bản chạy trên trình duyệt, hỗ trợ chơi 
 - Chơi offline với AI; lưu tiến trình cục bộ trên trình duyệt.
 - Phòng online bằng mã 6 ký tự, 2–4 người, có thể điền AI.
 - Server-authoritative: Cloudflare Durable Object quyết định xúc xắc, tiền, sự kiện, giao dịch và lượt.
-- WebSocket đồng bộ, chat, reconnect và AI tiếp quản người chơi mất kết nối.
+- WebSocket đồng bộ, chat, reconnect bằng session token riêng cho từng người chơi và AI tiếp quản người chơi mất kết nối.
 - Mua đất, thu tiền thuê, đấu giá, xây/bán nhà, thế chấp/chuộc lại, giao dịch, nhà giam, thẻ bài, phá sản và chiến thắng.
 - Renderer Three.js tải khi vào bàn cờ; bàn cờ HTML là fallback khi WebGL/3D không khả dụng.
 - Responsive và hỗ trợ `prefers-reduced-motion`.
@@ -95,6 +95,6 @@ Online multiplayer cần hai client trình duyệt và một Worker đã deploy 
 
 Dự án tham khảo cách tổ chức module, quản lý vòng đời game, state machine và giao thức của [MineMonopoly](https://github.com/FatPaper-1874/mine-monopoly). Cotyphu không sao chép mã nguồn, tài nguyên, bản đồ hay nội dung độc quyền của dự án đó. Kiến trúc backend được giữ phù hợp với Cloudflare Workers + Durable Objects thay vì Express/MySQL/WebRTC P2P.
 
-## Giấy phép
+## Phiên kết nối multiplayer\n\nMỗi người chơi online được cấp một session token ngẫu nhiên riêng. Trình duyệt lưu token theo mã phòng để khôi phục đúng người chơi sau khi tải lại trang hoặc mất kết nối; chỉ biết mã phòng và player ID là không đủ để chiếm phiên đã được cấp token. Không chia sẻ dữ liệu localStorage hoặc session token với người khác.\n\n## Giấy phép
 
 MIT. Tên đất, nhân vật, hình ảnh và nội dung trong game được xây dựng riêng; không sử dụng thương hiệu hoặc tài sản có bản quyền của trò chơi thương mại khác.
