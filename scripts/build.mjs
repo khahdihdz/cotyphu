@@ -49,7 +49,15 @@ await writeFile(resolve(controlsDir, 'OrbitControls.js'), controlsLocal, 'utf8')
 await copyFile(resolve(threeRoot, 'LICENSE'), resolve(vendorRoot, 'LICENSE'));
 await access(resolve(vendorRoot, 'build/three.module.js'));
 await access(resolve(controlsDir, 'OrbitControls.js'));
-console.log('✓ Three.js 0.179.1 + OrbitControls được đóng gói local');
+const threeBytes = (await readFile(resolve(vendorRoot, 'build/three.module.js'))).byteLength;
+const controlsBytes = (await readFile(resolve(controlsDir, 'OrbitControls.js'))).byteLength;
+if (threeBytes < 500000 || controlsBytes < 10000) {
+  throw new Error('BUILD CHECK FAILED: file Three.js/OrbitControls không đầy đủ.');
+}
+if (!controlsLocal.includes('../../../build/three.module.js')) {
+  throw new Error('BUILD CHECK FAILED: OrbitControls chưa trỏ tới Three.js local.');
+}
+console.log(`✓ Three.js 0.179.1 + OrbitControls đóng gói local (${threeBytes} + ${controlsBytes} bytes)`);
 
 // Viết import map local cho mọi module dùng bare specifier three.
 const htmlPath = resolve(root, 'public/index.html');
