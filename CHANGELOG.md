@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — Fix 3D library delivery
+
+- Validate that the local Three.js and OrbitControls bundles are generated and complete during production builds.
+- Precache both local 3D modules in the versioned service-worker shell cache and refresh clients to cache v4.
+- Avoid depending on a third-party CDN to load the 3D engine at runtime.
+
+
 ## Unreleased — 3D board visual upgrade
 
 - Added a polished 3D board base with metallic trim, tile surfaces and a Vietnamese center plaque.
