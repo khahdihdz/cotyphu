@@ -20,6 +20,7 @@ export class RoomConnection {
     this.pingTimer = null;
     this.shouldReconnect = false;
     this.playerId = null;
+    this.sessionToken = null;
     this.roomId = null;
   }
 
@@ -30,13 +31,17 @@ export class RoomConnection {
     const params = new URLSearchParams({ room, name });
     if (action) params.set('action', action);
     if (playerId) params.set('playerId', playerId);
+    if (this.sessionToken) params.set('sessionToken', this.sessionToken);
     return proto + '//' + endpoint.host + endpoint.pathname.replace(/\/+$/, '') + '/ws?' + params.toString();
   }
 
-  connect({ room, name, action, playerId }) {
+  connect({ room, name, action, playerId, sessionToken }) {
     this.roomId = room;
     this.playerName = name;
-    this.playerId = playerId || this.playerId;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(`ctp_room_session_${room}`) || 'null'); } catch (_) {}
+    this.playerId = playerId || saved?.playerId || this.playerId;
+    this.sessionToken = sessionToken || saved?.sessionToken || this.sessionToken;
     this.url = this.buildUrl({ room, name, action, playerId: this.playerId });
     this.shouldReconnect = true;
     this._open();
@@ -60,6 +65,10 @@ export class RoomConnection {
         return;
       }
       if (msg.playerId) this.playerId = msg.playerId;
+      if (msg.sessionToken) this.sessionToken = msg.sessionToken;
+      if (this.playerId && this.sessionToken) {
+        try { localStorage.setItem(`ctp_room_session_${this.roomId}`, JSON.stringify({ playerId: this.playerId, sessionToken: this.sessionToken })); } catch (_) {}
+      }
       this.onMessage(msg);
     });
 
