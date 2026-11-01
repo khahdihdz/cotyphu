@@ -20,7 +20,7 @@ export class Board3D {
     this.host=null;this.scene=null;this.camera=null;this.renderer=null;this.controls=null;
     this.pawns=new Map();this.dice=[];this.tileMeshes=new Map();this.tileData=new Map();
     this.ownerMarkers=new Map();this.buildingGroups=new Map();this.buildingLevels=new Map();
-    this.frame=0;this.observer=null;this.lastDice='';this.diceSpin=0;
+    this.frame=0;this.observer=null;this.lastDice='';this.diceSpin=0;this.clock=new THREE.Clock();
     this.reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
   mount(host,board){
@@ -36,13 +36,25 @@ export class Board3D {
     sun.castShadow=w>520;sun.shadow.mapSize.set(1024,1024);this.scene.add(sun);
     const floor=new THREE.Mesh(new THREE.PlaneGeometry(30,30),new THREE.MeshStandardMaterial({color:'#10242c',roughness:.95}));
     floor.rotation.x=-Math.PI/2;floor.position.y=-.42;floor.receiveShadow=true;this.scene.add(floor);
-    const base=new THREE.Mesh(new THREE.BoxGeometry(11.5,.42,11.5),new THREE.MeshStandardMaterial({color:'#704b35',roughness:.8}));
-    base.position.y=-.17;base.castShadow=true;this.scene.add(base);
+    const base=new THREE.Mesh(new THREE.BoxGeometry(11.7,.48,11.7),new THREE.MeshStandardMaterial({color:'#805238',roughness:.72}));
+    base.position.y=-.2;base.castShadow=true;base.receiveShadow=true;this.scene.add(base);
+    const trim=new THREE.Mesh(new THREE.BoxGeometry(11.82,.12,11.82),new THREE.MeshStandardMaterial({color:'#d6a84f',metalness:.62,roughness:.3}));
+    trim.position.y=-.39;this.scene.add(trim);
+    const inset=new THREE.Mesh(new THREE.BoxGeometry(11.35,.06,11.35),new THREE.MeshStandardMaterial({color:'#f0d7a0',metalness:.22,roughness:.5}));
+    inset.position.y=.055;this.scene.add(inset);
     for(const tile of board)this.addTile(tile);
-    const center=new THREE.Mesh(new THREE.BoxGeometry(7.7,.12,7.7),new THREE.MeshStandardMaterial({color:'#1c3943',roughness:.7}));
-    center.position.y=.08;this.scene.add(center);
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(2.5,.06,8,72),new THREE.MeshStandardMaterial({color:'#d4a84d',metalness:.6,roughness:.3}));
-    ring.rotation.x=Math.PI/2;ring.position.y=.17;this.scene.add(ring);
+    const center=new THREE.Mesh(new THREE.BoxGeometry(7.7,.16,7.7),new THREE.MeshStandardMaterial({color:'#214653',roughness:.56,metalness:.12}));
+    center.position.y=.12;center.castShadow=true;center.receiveShadow=true;this.scene.add(center);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(2.65,.055,10,96),new THREE.MeshStandardMaterial({color:'#e4b957',metalness:.68,roughness:.28}));
+    ring.rotation.x=Math.PI/2;ring.position.y=.22;this.scene.add(ring);
+    const plaque=document.createElement('canvas');plaque.width=1024;plaque.height=320;
+    const ctx=plaque.getContext('2d');const grad=ctx.createLinearGradient(0,0,1024,320);grad.addColorStop(0,'#173b49');grad.addColorStop(.5,'#285c68');grad.addColorStop(1,'#173b49');
+    ctx.fillStyle=grad;ctx.fillRect(0,0,1024,320);ctx.strokeStyle='#e7c16b';ctx.lineWidth=10;ctx.strokeRect(18,18,988,284);
+    ctx.textAlign='center';ctx.fillStyle='#ffe4a0';ctx.font='bold 108px sans-serif';ctx.fillText('CỜ TỶ PHÚ',512,158);
+    ctx.fillStyle='#d9edf0';ctx.font='bold 34px sans-serif';ctx.fillText('MUA ĐẤT • XÂY NHÀ • LÀM CHỦ CUỘC CHƠI',512,226);
+    const plaqueTexture=new THREE.CanvasTexture(plaque);plaqueTexture.colorSpace=THREE.SRGBColorSpace;
+    const plaqueMesh=new THREE.Mesh(new THREE.PlaneGeometry(5.4,1.68),new THREE.MeshStandardMaterial({map:plaqueTexture,roughness:.9}));
+    plaqueMesh.rotation.x=-Math.PI/2;plaqueMesh.position.set(0,.215,0);this.scene.add(plaqueMesh);
     this.addDice();
     this.controls=new OrbitControls(this.camera,this.renderer.domElement);
     this.controls.target.set(0,0,0);this.controls.enableDamping=true;this.controls.dampingFactor=.07;
@@ -51,17 +63,47 @@ export class Board3D {
   }
   addTile(tile){
     const p=pos(tile.id),color=tile.type==='PROPERTY'?(GROUP[tile.group]||'#748494'):(SPECIAL[tile.type]||'#536879');
-    const box=new THREE.Mesh(new THREE.BoxGeometry(.94,.24,.94),new THREE.MeshStandardMaterial({color,roughness:.58,metalness:.08}));
+    const shadow=new THREE.Mesh(new THREE.BoxGeometry(.98,.28,.98),new THREE.MeshStandardMaterial({color:'#142d36',roughness:.9}));
+    shadow.position.set(p.x,.13,p.z);this.scene.add(shadow);
+    const box=new THREE.Mesh(new THREE.BoxGeometry(.94,.24,.94),new THREE.MeshStandardMaterial({color,roughness:.48,metalness:.12}));
     box.position.copy(p);box.castShadow=true;box.receiveShadow=true;this.scene.add(box);
-    const label=new THREE.Mesh(new THREE.PlaneGeometry(.86,.42),new THREE.MeshStandardMaterial({map:labelMap(tile),roughness:1}));
-    label.rotation.x=-Math.PI/2;label.position.set(p.x,.275,p.z);this.scene.add(label);
+    const top=new THREE.Mesh(new THREE.PlaneGeometry(.88,.88),new THREE.MeshStandardMaterial({color:'#fff4d9',roughness:.94}));
+    top.rotation.x=-Math.PI/2;top.position.set(p.x,.273,p.z);this.scene.add(top);
+    if(tile.type==='PROPERTY'){
+      const stripe=new THREE.Mesh(new THREE.BoxGeometry(.9,.045,.16),new THREE.MeshStandardMaterial({color,roughness:.42,metalness:.08}));
+      stripe.position.set(p.x,.305,p.z-.34);this.scene.add(stripe);
+    }
+    const label=new THREE.Mesh(new THREE.PlaneGeometry(.84,.42),new THREE.MeshStandardMaterial({map:labelMap(tile),transparent:true,roughness:1}));
+    label.rotation.x=-Math.PI/2;label.position.set(p.x,.279,p.z+.07);this.scene.add(label);
     this.tileMeshes.set(tile.id,box);this.tileData.set(tile.id,tile);
   }
+  createDie(){
+    const group=new THREE.Group();
+    const cube=new THREE.Mesh(new THREE.BoxGeometry(.68,.68,.68),new THREE.MeshStandardMaterial({color:'#fffaf0',roughness:.28,metalness:.02}));
+    cube.castShadow=true;group.add(cube);
+    const pipMaterial=new THREE.MeshStandardMaterial({color:'#263b49',roughness:.42});
+    const faces=[
+      {n:[0,1,0],u:[1,0,0],v:[0,0,-1],count:1},
+      {n:[0,-1,0],u:[1,0,0],v:[0,0,1],count:6},
+      {n:[0,0,1],u:[1,0,0],v:[0,1,0],count:2},
+      {n:[0,0,-1],u:[-1,0,0],v:[0,1,0],count:5},
+      {n:[1,0,0],u:[0,0,-1],v:[0,1,0],count:3},
+      {n:[-1,0,0],u:[0,0,1],v:[0,1,0],count:4}
+    ];
+    const layouts={1:[[0,0]],2:[[-1,-1],[1,1]],3:[[-1,-1],[0,0],[1,1]],4:[[-1,-1],[1,-1],[-1,1],[1,1]],5:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]],6:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]};
+    for(const face of faces){
+      const n=new THREE.Vector3(...face.n),u=new THREE.Vector3(...face.u),v=new THREE.Vector3(...face.v);
+      for(const [x,y] of layouts[face.count]){
+        const pip=new THREE.Mesh(new THREE.SphereGeometry(.052,10,8),pipMaterial);
+        pip.position.copy(n.clone().multiplyScalar(.345).add(u.clone().multiplyScalar(x*.17)).add(v.clone().multiplyScalar(y*.17)));
+        group.add(pip);
+      }
+    }
+    return group;
+  }
   addDice(){
-    const material=new THREE.MeshStandardMaterial({color:'#fffaf0',roughness:.3});
     for(let i=0;i<2;i++){
-      const die=new THREE.Mesh(new THREE.BoxGeometry(.7,.7,.7),material.clone());
-      die.position.set(i?-.5:.5,.7,0);die.castShadow=true;this.scene.add(die);this.dice.push(die);
+      const die=this.createDie();die.position.set(i?-.48:.48,.72,0);die.rotation.set(.18+i*.12,.3+i*.4,.12);die.castShadow=true;this.scene.add(die);this.dice.push(die);
     }
   }
   pawn(color){
@@ -145,12 +187,14 @@ export class Board3D {
   animate(){
     this.frame=requestAnimationFrame(()=>this.animate());
     this.controls?.update();
-    for(const pawn of this.pawns.values()){
-      if(pawn.userData.target&&!this.reduce)pawn.position.lerp(pawn.userData.target,.16);
+    const elapsed=this.clock.getElapsedTime();
+    for(const [index,pawn] of [...this.pawns.values()].entries()){
+      if(pawn.userData.target&&!this.reduce){pawn.position.lerp(pawn.userData.target,.16);pawn.position.y+=Math.sin(elapsed*3.2+index)*.0018;}
       else if(pawn.userData.target)pawn.position.copy(pawn.userData.target);
+      if(!this.reduce)pawn.rotation.y=Math.sin(elapsed*.8+index)*.12;
     }
     if(this.diceSpin>.002){
-      this.dice.forEach((die,i)=>{die.rotation.x+=this.diceSpin*(i?-.7:1);die.rotation.y+=this.diceSpin*(i?.8:-.9);});
+      this.dice.forEach((die,i)=>{die.rotation.x+=this.diceSpin*(i?-.7:1);die.rotation.y+=this.diceSpin*(i?.8:-.9);die.rotation.z+=this.diceSpin*(i?.45:-.35);});
       this.diceSpin*=.92;
     }
     this.renderer?.render(this.scene,this.camera);
