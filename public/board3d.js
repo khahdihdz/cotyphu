@@ -189,7 +189,7 @@ export class Board3D {
     this.controls?.update();
     const elapsed=this.clock.getElapsedTime();
     for(const [index,pawn] of [...this.pawns.values()].entries()){
-      if(pawn.userData.target&&!this.reduce){pawn.position.lerp(pawn.userData.target,.16);pawn.position.y+=Math.sin(elapsed*3.2+index)*.0018;}
+      if(pawn.userData.target&&!this.reduce){pawn.position.lerp(pawn.userData.target,.16);pawn.position.y=pawn.userData.target.y+Math.sin(elapsed*3.2+index)*.035;}
       else if(pawn.userData.target)pawn.position.copy(pawn.userData.target);
       if(!this.reduce)pawn.rotation.y=Math.sin(elapsed*.8+index)*.12;
     }
