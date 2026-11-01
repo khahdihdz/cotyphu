@@ -87,6 +87,13 @@ export class GameRoom {
         }
         const nextToken = savedToken || createSessionToken();
         await this.ctx.storage.put(`session:${rejoinPlayerId}`, nextToken);
+        // Chỉ giữ một WebSocket hoạt động cho mỗi người chơi.
+        for (const [oldWs, oldSession] of this.sessions) {
+          if (oldSession.playerId === rejoinPlayerId) {
+            this.sessions.delete(oldWs);
+            try { oldWs.close(4001, 'reconnected on another connection'); } catch (_) {}
+          }
+        }
         existing.connected = true; delete existing.disconnectedAt;
         this.sessions.set(ws, { playerId: rejoinPlayerId, chatTimestamps: [] });
         this.safeSend(ws, { type: S2C.GAME_STATE, state: this.game, playerId: rejoinPlayerId, sessionToken: nextToken });
