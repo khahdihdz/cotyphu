@@ -63,7 +63,11 @@ Nếu không đặt biến, frontend dùng cùng origin để tương thích khi
 - Reload/reconnect một client và xác minh người chơi được khôi phục.
 - Kiểm tra offline AI khi không có mạng.
 
-## 5. Giới hạn và bảo mật
+## 5. Phiên kết nối và khôi phục người chơi
+
+Mỗi người chơi được cấp session token ngẫu nhiên khi vào phòng. Frontend lưu token cùng `playerId` theo mã phòng trong `localStorage`; khi tải lại trang và nhập lại mã phòng, client dùng token để khôi phục phiên. Không chia sẻ token hoặc dữ liệu lưu trong trình duyệt. Server chỉ cho phép một WebSocket đang hoạt động cho mỗi người chơi.
+
+## 6. Giới hạn và bảo mật
 
 - Vercel chỉ host frontend; không thay thế Durable Objects.
 - Game state online phải tiếp tục được xác thực trong `src/gameRoom.js`; không chuyển quyền quyết định xúc xắc, tiền, giao dịch hoặc lượt chơi về client.
