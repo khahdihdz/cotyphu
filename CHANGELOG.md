@@ -1,3 +1,11 @@
+## Unreleased
+
+### Fixed
+- Use the locally bundled Three.js import map directly in the source HTML, not only as a build-time rewrite.
+- Reset the 3D loader after initialization failure so the game can retry instead of retaining a failed promise.
+- Show the underlying module/WebGL error in the UI to make remaining device-specific failures diagnosable.
+- Bump the service-worker shell cache to v5 so clients discard previously cached 3D assets.
+
 # Changelog
 
 ## Unreleased — Fix 3D library delivery
