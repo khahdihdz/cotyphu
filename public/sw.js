@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'co-ty-phu-shell-';
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const APP_SHELL = [
   './',
@@ -12,6 +12,8 @@ const APP_SHELL = [
   './protocol.js',
   './websocket.js',
   './board3d.js',
+  './vendor/three/build/three.module.js',
+  './vendor/three/examples/jsm/controls/OrbitControls.js',
   './board3d.css',
   './runtime-config.js',
   './manifest.webmanifest',
@@ -26,7 +28,7 @@ self.addEventListener('install', (event) => {
       try {
         await cache.add(new Request(path, { cache: 'reload' }));
       } catch (error) {
-        // A missing optional shell asset must not prevent installation.
+        // Optional assets may be absent; core Three.js files are validated by the build.
       }
     }));
     await self.skipWaiting();
