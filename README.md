@@ -50,7 +50,7 @@ Trình duyệt
 4. Build Command: `npm run build`.
 5. Output Directory: `public`.
 6. Thêm Environment Variable:
-   - `CTP_WORKER_URL` = URL HTTPS của Cloudflare Worker (không thêm `/ws` hay `/api`).
+   - `CTP_WORKER_URL` = URL HTTPS của Cloudflare Worker (không thêm `/ws` hay `/api`). Mặc định repository đã cấu hình `https://cotyphu.khahdihdz.workers.dev`, chỉ cần override nếu dùng Worker khác.
 7. Deploy hoặc Redeploy.
 
 Build script sẽ sinh `public/runtime-config.js` từ biến môi trường để frontend biết Worker endpoint. Hướng dẫn đầy đủ: [docs/DEPLOYMENT_VERCEL.md](docs/DEPLOYMENT_VERCEL.md).
@@ -62,7 +62,7 @@ npm install
 npm run dev
 ```
 
-Để test frontend với Worker đã deploy, đặt biến `CTP_WORKER_URL` trước khi build:
+Để test frontend với Worker khác, đặt biến `CTP_WORKER_URL` trước khi build (nếu không đặt, endpoint mặc định ở trên được dùng):
 
 ```bash
 CTP_WORKER_URL=https://<worker>.<account>.workers.dev npm run build
