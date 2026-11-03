@@ -72,7 +72,7 @@ const htmlWithLocalImportMap = htmlSource.slice(0, importStart) + importMap + ht
 await writeFile(htmlPath, htmlWithLocalImportMap, 'utf8');
 console.log('✓ Import map trỏ tới Three.js local');
 
-const workerUrl = (process.env.CTP_WORKER_URL || '').trim().replace(/\/+$/, '');
+const workerUrl = (process.env.CTP_WORKER_URL || 'https://cotyphu.khahdihdz.workers.dev').trim().replace(/\/+$/, '');
 if (workerUrl) {
   const parsed = new URL(workerUrl);
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
