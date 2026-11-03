@@ -30,5 +30,7 @@ jobs:
         run: npm run check
       - name: Build production
         run: npm run build
+      - name: Test production assets
+        run: npm run test:build
       - name: Test game engine
         run: npm test
