@@ -1,5 +1,10 @@
 ## Unreleased
 
+### Improved
+- Expanded JavaScript syntax checks to cover every runtime, backend and build module.
+- Added a production asset smoke test for the local Three.js bundle, OrbitControls import map and runtime configuration.
+- Corrected README multiplayer session section formatting and documented the production smoke-test command.
+
 ### Fixed
 - Use the locally bundled Three.js import map directly in the source HTML, not only as a build-time rewrite.
 - Reset the 3D loader after initialization failure so the game can retry instead of retaining a failed promise.
