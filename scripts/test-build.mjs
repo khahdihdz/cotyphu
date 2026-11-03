@@ -20,12 +20,12 @@ assert.ok((await stat(new URL(threePath, import.meta.url))).size > 500_000, 'Bun
 const controls = await read(controlsPath);
 assert.ok(controls.includes("from '../../../build/three.module.js'"),
   'OrbitControls phải import Three.js local bằng relative path');
-assert.ok(!/from\\s+['"]three['"]/.test(controls),
+assert.ok(!/from\s+['"]three['"]/.test(controls),
   'OrbitControls không được giữ bare import chưa được resolve');
 
 const runtime = await read('../public/runtime-config.js');
 assert.ok(runtime.includes('window.CTP_CONFIG'), 'Thiếu runtime config');
-assert.ok(!/https?:\\/\\/[^\\s'"]+:[^\\s'"]+@/.test(runtime),
+assert.ok(!/https?:\/\/[^\s'"]+:[^\s'"]+@/.test(runtime),
   'Không được đưa URL có thông tin đăng nhập vào runtime config');
 
 console.log('✓ Production HTML import map trỏ tới Three.js local');
