@@ -1,6 +1,6 @@
 # 🎲 Cờ Tỷ Phú Online
 
-Game Cờ Tỷ Phú nguyên bản chạy trên trình duyệt, hỗ trợ chơi offline với AI và multiplayer 2–4 người. Giao diện 3D Three.js, luật chơi tiếng Việt, tiền Việt Nam đồng và tương thích điện thoại, tablet, máy tính.
+Game Cờ Tỷ Phú chạy trực tiếp trên trình duyệt, hỗ trợ chơi offline với AI và multiplayer online 2–4 người. Giao diện 3D Three.js, luật chơi tiếng Việt, tiền Việt Nam đồng và tương thích điện thoại, tablet, máy tính.
 
 ## Tính năng
 
@@ -13,13 +13,13 @@ Game Cờ Tỷ Phú nguyên bản chạy trên trình duyệt, hỗ trợ chơi 
 - Renderer Three.js tải khi vào bàn cờ; bàn cờ HTML là fallback khi WebGL/3D không khả dụng.
 - Responsive và hỗ trợ `prefers-reduced-motion`.
 
-## Kiến trúc triển khai mới
+## Kiến trúc triển khai
 
 ```text
 Trình duyệt
   ├─ Vercel: frontend tĩnh (public/)
   │    ├─ HTML / CSS / JavaScript ES modules
-  │    ├─ Three.js renderer
+  │    ├─ Three.js renderer (bundle local)
   │    └─ Offline game engine + AI
   │
   └─ HTTPS / WebSocket
@@ -31,7 +31,7 @@ Trình duyệt
                  └─ lưu trạng thái phòng trong DO storage
 ```
 
-**Không cần** PHP hosting, MySQL, VPS hoặc Node.js chạy nền. Node.js chỉ dùng ở bước cài dependency, kiểm tra và build trên CI/Vercel. Cloudflare Durable Objects là backend multiplayer.
+**Không cần** PHP hosting, MySQL, VPS hoặc Node.js chạy nền. Node.js chỉ dùng ở bước cài dependency, kiểm tra và build trên CI/Vercel. Cloudflare Durable Objects là backend multiplayer. Có thể dùng PHP hosting cũ thông qua `index.php` nếu cấu hình Worker endpoint.
 
 ## Deploy production
 
@@ -77,6 +77,7 @@ CTP_WORKER_URL=https://<worker>.<account>.workers.dev npm run build
 - `src/ai.js`, `src/cards.js`: AI và bộ thẻ.
 - `src/protocol.js`: giao thức client/server.
 - `scripts/build.mjs`: kiểm tra dữ liệu/asset và sinh runtime config.
+- `scripts/test-build.mjs`: kiểm tra smoke test bundle 3D production.
 - `scripts/test-game.mjs`: kiểm thử luật chơi.
 - `wrangler.toml`: cấu hình Worker và Durable Objects.
 - `vercel.json`: cấu hình deploy frontend trên Vercel.
@@ -84,17 +85,23 @@ CTP_WORKER_URL=https://<worker>.<account>.workers.dev npm run build
 ## Phát triển và kiểm thử
 
 ```bash
+npm install
 npm run check
 npm run build
+npm run test:build
 npm test
 ```
 
-Online multiplayer cần hai client trình duyệt và một Worker đã deploy hoặc đang chạy qua Wrangler. Chỉ chạy unit test không thay thế kiểm thử WebSocket nhiều client.
+Online multiplayer cần hai client trình duyệt và một Worker đã deploy hoặc đang chạy qua Wrangler. Unit test và asset smoke test không thay thế kiểm thử WebSocket nhiều client.
 
 ## Tham khảo kiến trúc
 
 Dự án tham khảo cách tổ chức module, quản lý vòng đời game, state machine và giao thức của [MineMonopoly](https://github.com/FatPaper-1874/mine-monopoly). Cotyphu không sao chép mã nguồn, tài nguyên, bản đồ hay nội dung độc quyền của dự án đó. Kiến trúc backend được giữ phù hợp với Cloudflare Workers + Durable Objects thay vì Express/MySQL/WebRTC P2P.
 
-## Phiên kết nối multiplayer\n\nMỗi người chơi online được cấp một session token ngẫu nhiên riêng. Trình duyệt lưu token theo mã phòng để khôi phục đúng người chơi sau khi tải lại trang hoặc mất kết nối; chỉ biết mã phòng và player ID là không đủ để chiếm phiên đã được cấp token. Không chia sẻ dữ liệu localStorage hoặc session token với người khác.\n\n## Giấy phép
+## Phiên kết nối multiplayer
+
+Mỗi người chơi online được cấp một session token ngẫu nhiên riêng. Trình duyệt lưu token theo mã phòng để khôi phục đúng người chơi sau khi tải lại trang hoặc mất kết nối; chỉ biết mã phòng và player ID là không đủ để chiếm phiên đã được cấp token. Không chia sẻ dữ liệu localStorage hoặc session token với người khác.
+
+## Giấy phép
 
 MIT. Tên đất, nhân vật, hình ảnh và nội dung trong game được xây dựng riêng; không sử dụng thương hiệu hoặc tài sản có bản quyền của trò chơi thương mại khác.
