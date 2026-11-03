@@ -1,6 +1,6 @@
 {
   "name": "co-ty-phu-online",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Cờ Tỷ Phú 3D browser game — Three.js, Vercel, Cloudflare Workers, Durable Objects and WebSocket",
   "type": "module",
   "private": true,
@@ -8,7 +8,8 @@
     "dev": "npm run build && wrangler dev",
     "build": "node scripts/build.mjs",
     "test": "node scripts/test-game.mjs",
-    "check": "node --check public/game.js && node --check public/websocket.js && node --check public/board3d.js && node --check src/worker.js && node --check src/gameRoom.js",
+    "test:build": "node scripts/test-build.mjs",
+    "check": "node --check public/ai.js && node --check public/board3d.js && node --check public/game.js && node --check public/gameLogic.js && node --check public/protocol.js && node --check public/ui.js && node --check public/websocket.js && node --check src/ai.js && node --check src/cards.js && node --check src/gameLogic.js && node --check src/gameRoom.js && node --check src/protocol.js && node --check src/worker.js && node --check scripts/build.mjs && node --check scripts/test-game.mjs && node --check scripts/test-build.mjs",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy"
   },
